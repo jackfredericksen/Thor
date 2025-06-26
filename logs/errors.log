@@ -59,3 +59,4 @@
 2025-06-26 00:32:13,146 - api_clients.dexscreener - ERROR - dexscreener.py:41 - Failed to fetch trending tokens: Circuit breaker OPEN for make_request
 2025-06-26 00:58:15,031 - trader - CRITICAL - trader.py:421 - EMERGENCY STOP INITIATED
 2025-06-26 00:58:15,031 - risk_management - CRITICAL - risk_management.py:444 - EMERGENCY CLOSE ALL POSITIONS TRIGGERED
+2025-06-26 00:58:15,032 - trader - CRITICAL - trader.py:450 - EMERGENCY STOP COMPLETED

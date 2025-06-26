@@ -411,3 +411,10 @@ class TradingBot:
                         price_updates[token_address] = current_price
                 except Exception as e:
                     self.logger.warning(f"Failed to get price for {token_address}: {str(e)}")
+            
+            # Update trader with new prices
+            if price_updates:
+                self.trader.update_all_positions(price_updates)
+            
+        except Exception as e:
+            self.logger.error(f"Error updating positions: {str(e)}")

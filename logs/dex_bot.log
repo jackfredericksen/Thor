@@ -1,0 +1,104 @@
+2025-06-26 00:32:00,766 - root - INFO - test.py:39 - Logger is working!
+2025-06-26 00:32:01,536 - utils.error_handling - ERROR - error_handling.py:122 - dexscreener client error: 404 - <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /latest/dex/tokens/trending/solana</pre>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9559fa846e240132',t:'MTc1MDkxMjMyMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+
+2025-06-26 00:32:01,537 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 1 failed: dexscreener client error: 404. Retrying in 0.85 seconds...
+2025-06-26 00:32:02,514 - utils.error_handling - ERROR - error_handling.py:122 - dexscreener client error: 404 - <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /latest/dex/tokens/trending/solana</pre>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9559fa8a885f0132',t:'MTc1MDkxMjMyNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+
+2025-06-26 00:32:02,515 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 2 failed: dexscreener client error: 404. Retrying in 1.19 seconds...
+2025-06-26 00:32:03,845 - utils.error_handling - ERROR - error_handling.py:122 - dexscreener client error: 404 - <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /latest/dex/tokens/trending/solana</pre>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9559fa92ce040132',t:'MTc1MDkxMjMyNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+
+2025-06-26 00:32:03,845 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 3 failed: dexscreener client error: 404. Retrying in 3.71 seconds...
+2025-06-26 00:32:07,690 - utils.error_handling - ERROR - error_handling.py:122 - dexscreener client error: 404 - <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /latest/dex/tokens/trending/solana</pre>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9559faaada9e0132',t:'MTc1MDkxMjMyOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+
+2025-06-26 00:32:07,691 - utils.error_handling - ERROR - error_handling.py:63 - _make_request failed after 3 retries. Last error: dexscreener client error: 404
+2025-06-26 00:32:07,691 - api_clients.dexscreener - ERROR - dexscreener.py:41 - Failed to fetch trending tokens: dexscreener client error: 404
+2025-06-26 00:32:07,879 - utils.error_handling - ERROR - error_handling.py:122 - dexscreener client error: 404 - <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /latest/dex/tokens/trending/solana</pre>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9559faabbbcf0132',t:'MTc1MDkxMjMyOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+
+2025-06-26 00:32:07,880 - utils.error_handling - WARNING - error_handling.py:204 - Circuit breaker OPEN after 5 failures
+2025-06-26 00:32:07,880 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 1 failed: dexscreener client error: 404. Retrying in 0.70 seconds...
+2025-06-26 00:32:08,585 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 2 failed: Circuit breaker OPEN for make_request. Retrying in 1.64 seconds...
+2025-06-26 00:32:10,229 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 3 failed: Circuit breaker OPEN for make_request. Retrying in 2.92 seconds...
+2025-06-26 00:32:13,146 - utils.error_handling - ERROR - error_handling.py:63 - _make_request failed after 3 retries. Last error: Circuit breaker OPEN for make_request
+2025-06-26 00:32:13,146 - api_clients.dexscreener - ERROR - dexscreener.py:41 - Failed to fetch trending tokens: Circuit breaker OPEN for make_request
+2025-06-26 00:32:18,147 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 1 failed: Circuit breaker OPEN for make_request. Retrying in 0.51 seconds...
+2025-06-26 00:32:18,662 - utils.error_handling - WARNING - error_handling.py:76 - _make_request attempt 2 failed: Circuit breaker OPEN for make_request. Retrying in 1.35 seconds...
+2025-06-26 00:38:35,928 - root - INFO - test.py:39 - Logger is working!
+2025-06-26 00:38:36,428 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:38:36,467 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:38:41,504 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:38:46,542 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:45:00,313 - root - INFO - test.py:90 - Logger test message
+2025-06-26 00:45:00,315 - smart_money - INFO - smart_money.py:11 - Smart money tracker initialized
+2025-06-26 00:45:00,315 - trader - INFO - trader.py:31 - Trader initialized - Paper trading: True
+2025-06-26 00:45:00,706 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:45:00,706 - filters - INFO - filters.py:440 - Filtered 1 tokens down to 0
+2025-06-26 00:49:38,498 - root - INFO - main.py:36 - Initializing Dex Trading Bot...
+2025-06-26 00:49:38,500 - smart_money - INFO - smart_money.py:11 - Smart money tracker initialized
+2025-06-26 00:49:38,500 - trader - INFO - trader.py:31 - Trader initialized - Paper trading: True
+2025-06-26 00:49:38,500 - root - INFO - main.py:70 - Bot initialization completed
+2025-06-26 00:49:38,501 - root - INFO - main.py:80 - Starting Dex Trading Bot...
+2025-06-26 00:49:38,501 - root - INFO - main.py:134 - Authenticating with APIs...
+2025-06-26 00:49:38,501 - root - INFO - main.py:138 - Paper trading mode - skipping authentication
+2025-06-26 00:49:38,501 - root - INFO - main.py:462 - Performing health check...
+2025-06-26 00:49:38,830 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:49:38,831 - root - INFO - main.py:471 - Paper trading mode - health check passed
+2025-06-26 00:49:38,831 - root - INFO - main.py:95 - Bot started successfully, entering main loop...
+2025-06-26 00:49:38,831 - root - INFO - main.py:169 - Starting iteration 1
+2025-06-26 00:49:38,867 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:49:38,906 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-26 00:49:38,943 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:49:38,943 - root - INFO - main.py:276 - Fetched 8 unique tokens from 80 total
+2025-06-26 00:49:38,944 - filters - INFO - filters.py:440 - Filtered 8 tokens down to 0
+2025-06-26 00:49:38,944 - root - INFO - main.py:311 - Filter stats: 0/8 passed (0.0% pass rate)
+2025-06-26 00:49:38,945 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-26 00:49:53,946 - root - INFO - main.py:169 - Starting iteration 2
+2025-06-26 00:49:53,988 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:49:54,032 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-26 00:49:54,068 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-26 00:49:54,069 - root - INFO - main.py:276 - Fetched 8 unique tokens from 80 total
+2025-06-26 00:49:54,069 - filters - INFO - filters.py:440 - Filtered 8 tokens down to 0

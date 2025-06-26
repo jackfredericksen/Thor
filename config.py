@@ -29,7 +29,7 @@ class Config:
 
     API_URLS = {
         # Free public APIs
-        "dexscreener": "https://api.dexscreener.com/latest/dex",
+        "dexscreener": "https://api.dexscreener.com",  # Correct base URL
         "gmgn": "https://gmgn.ai/defi/router/v1",  # Free trading API
         "pumpfun": "https://pumpportal.fun/api",  # Third-party free API
         

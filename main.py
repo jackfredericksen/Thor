@@ -1,297 +1,299 @@
-# main.py
+# main.py - Updated with comprehensive Solana memecoin discovery
 
-import json
-import logging
 import time
-from typing import Dict, List
+import json
 import pandas as pd
+import logging
+from datetime import datetime
+from typing import List, Dict, Any
 
-from api_clients.gmgn import GMGNClient
-from api_clients.token_discovery import TokenDiscoveryClient, TokenDiscoveryError
-from config import API_KEYS, DB_PATH, FETCH_INTERVAL, validate_config
-from filters import passes_filters
-from smart_money import SmartMoneyTracker
+# Your existing imports
+from config import DB_PATH, FETCH_INTERVAL, API_KEYS
 from storage import Storage
+from filters import filter_tokens_batch, get_filter_stats
 from technicals import Technicals
 from trader import Trader
-import os
-os.environ['PYTHONIOENCODING'] = 'utf-8'
-# Set up logging
+from smart_money import SmartMoneyTracker
+from token_discovery import TokenDiscovery
+from api_clients.gmgn import GMGNClient
+
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("bot.log"), logging.StreamHandler()],
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('trading_bot.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
-
 class TradingBot:
+    """Main trading bot with comprehensive Solana memecoin discovery"""
+    
     def __init__(self):
-        # Validate configuration on startup
-        config_warnings = validate_config()
-        if config_warnings:
-            logger.warning("Configuration issues found:")
-            for warning in config_warnings:
-                logger.warning(f"  ⚠️ {warning}")
-
-        # Initialize components
+        # Initialize all components
         self.storage = Storage(DB_PATH)
         self.gmgn = GMGNClient()
-        self.token_discovery = TokenDiscoveryClient()
         self.smart_tracker = SmartMoneyTracker(self.gmgn, self.storage)
         self.technicals = Technicals()
         self.trader = Trader(self.gmgn, self.storage)
-
-        # Track statistics
-        self.stats = {
-            "tokens_processed": 0,
-            "tokens_filtered": 0,
-            "trades_executed": 0,
-            "api_errors": 0,
-            "start_time": time.time(),
-        }
-
-        # Initialize authentication (if API keys are available)
-        self._setup_authentication()
-
-        logger.info("🚀 Trading Bot initialized successfully")
-
-    def _setup_authentication(self):
-        """Set up authentication for APIs that require it"""
+        self.token_discovery = TokenDiscovery(config=None)  # Pass your config here
+        
+        # Performance tracking
+        self.cycle_count = 0
+        self.total_tokens_discovered = 0
+        self.total_tokens_filtered = 0
+        self.total_trades_executed = 0
+        
+        logger.info("Trading bot initialized successfully")
+    
+    def authenticate(self):
+        """Authenticate with all services"""
         try:
-            if API_KEYS["telegram_token"] != "YOUR_TELEGRAM_BOT_TOKEN":
-                self.gmgn.authenticate_telegram(API_KEYS["telegram_token"])
-                logger.info("✅ Telegram authentication configured")
-
-            if API_KEYS["wallet_address"] != "YOUR_WALLET_ADDRESS":
-                self.gmgn.authenticate_wallet(API_KEYS["wallet_address"])
-                logger.info("✅ Wallet authentication configured")
-
+            self.gmgn.authenticate_telegram(API_KEYS["telegram_token"])
+            self.gmgn.authenticate_wallet(API_KEYS["wallet_address"])
+            logger.info("Authentication completed")
         except Exception as e:
-            logger.warning(f"Authentication setup failed: {e}")
-
-    def discover_tokens(self) -> List[Dict]:
-        """Discover new tokens using the robust token discovery client"""
+            logger.error(f"Authentication failed: {str(e)}")
+            raise
+    
+    def discover_and_filter_tokens(self) -> List[Dict[str, Any]]:
+        """Comprehensive token discovery and filtering"""
+        logger.info("=" * 60)
+        logger.info(f"CYCLE {self.cycle_count + 1} - Starting token discovery")
+        logger.info("=" * 60)
+        
+        # STEP 1: Discover tokens from all sources
+        start_time = time.time()
+        all_discovered_tokens = self.token_discovery.discover_all_tokens(max_workers=6)
+        discovery_time = time.time() - start_time
+        
+        self.total_tokens_discovered += len(all_discovered_tokens)
+        logger.info(f"✅ Discovery complete: {len(all_discovered_tokens)} tokens in {discovery_time:.1f}s")
+        
+        # STEP 2: Apply comprehensive filtering
+        start_time = time.time()
+        filtered_tokens = filter_tokens_batch(
+            tokens=all_discovered_tokens,
+            max_tokens=200,  # Process top 200 tokens
+            min_score=0.25   # Minimum quality score
+        )
+        filter_time = time.time() - start_time
+        
+        self.total_tokens_filtered += len(filtered_tokens)
+        logger.info(f"✅ Filtering complete: {len(filtered_tokens)} tokens passed in {filter_time:.1f}s")
+        
+        # STEP 3: Display filter statistics
+        if filtered_tokens:
+            stats = get_filter_stats(filtered_tokens)
+            logger.info(f"📊 Filter Stats:")
+            logger.info(f"   Average Score: {stats['score_stats']['average']:.3f}")
+            logger.info(f"   Average Age: {stats['age_stats']['average_hours']:.1f} hours")
+            logger.info(f"   Total Volume: ${stats['volume_stats']['total_volume']:,.0f}")
+            logger.info(f"   Sources: {stats['source_breakdown']}")
+        
+        return filtered_tokens
+    
+    def analyze_token_technicals(self, token_data: Dict[str, Any]) -> str:
+        """Analyze token technicals and return rating"""
         try:
-            logger.info("🔍 Discovering new tokens...")
-            tokens = self.token_discovery.discover_new_tokens()
-
-            if not tokens:
-                logger.warning("No tokens discovered, using fallback data")
-                return self._get_fallback_tokens()
-
-            logger.info(f"✅ Discovered {len(tokens)} tokens from various sources")
-            return tokens
-
-        except TokenDiscoveryError as e:
-            logger.error(f"Token discovery error: {e}")
-            self.stats["api_errors"] += 1
-            return self._get_fallback_tokens()
-
+            # Use price history if available
+            if 'price_history' in token_data and token_data['price_history']:
+                prices = pd.Series(token_data['price_history'])
+                if len(prices) >= 14:  # Need enough data for RSI
+                    rsi = self.technicals.compute_rsi(prices)
+                    slope = self.technicals.compute_ema_slope(prices)
+                    upper_band, lower_band = self.technicals.compute_volatility_band(prices)
+                    rating = self.technicals.classify_trend(rsi, slope, prices, upper_band, lower_band)
+                    return rating
+            
+            # Fallback to simple price change analysis
+            price_change = float(token_data.get('price_change_24h', 0))
+            volume = float(token_data.get('daily_volume_usd', 0))
+            filter_score = float(token_data.get('filter_score', 0))
+            
+            # Multi-factor rating system
+            if price_change > 20 and volume > 50000 and filter_score > 0.6:
+                return "bullish"
+            elif price_change < -15 and volume > 10000:
+                return "bearish"
+            elif price_change > 10 and filter_score > 0.5:
+                return "bullish"
+            elif price_change > 5 and volume > 100000:
+                return "bullish"
+            else:
+                return "neutral"
+                
         except Exception as e:
-            logger.error(f"Unexpected error in token discovery: {e}")
-            self.stats["api_errors"] += 1
-            return self._get_fallback_tokens()
-
-    def _get_fallback_tokens(self) -> List[Dict]:
-        """Return fallback tokens when discovery fails"""
-        logger.info("Using fallback token data for testing")
-        return [
-            {
-                "address": "So11111111111111111111111111111111111112",
-                "symbol": "SOL",
-                "name": "Solana",
-                "price": 100.50,
-                "volume": 50000000,
-                "market_cap": 40000000000,
-                "source": "fallback",
-            },
-            {
-                "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-                "symbol": "USDC",
-                "name": "USD Coin",
-                "price": 1.00,
-                "volume": 100000000,
-                "market_cap": 25000000000,
-                "source": "fallback",
-            },
-        ]
-
-    def process_token(self, token_data: Dict) -> bool:
-        """Process a single token through the trading pipeline"""
-        try:
-            token_address = token_data.get("address")
-            if not token_address:
-                logger.warning("Token missing address, skipping")
-                return False
-
-            # Convert discovered token data to the format expected by filters
-            token_info = {
-                "daily_volume_usd": token_data.get("volume", 0),
-                "age_hours": 24,  # Assume recent for discovered tokens
-                "holder_count": 8000,  # Mock data - would need real holder count API
-                "price_history": self._generate_mock_price_history(
-                    token_data.get("price", 1.0)
-                ),
-            }
-
-            # Apply filters
-            if not passes_filters(token_info):
-                logger.debug(
-                    f"Token {token_data.get('symbol', token_address[:8])} failed filters"
+            logger.error(f"Error in technical analysis: {str(e)}")
+            return "neutral"
+    
+    def process_tokens(self, filtered_tokens: List[Dict[str, Any]]):
+        """Process filtered tokens for trading opportunities"""
+        logger.info(f"🔍 Processing {len(filtered_tokens)} filtered tokens...")
+        
+        processed_count = 0
+        bullish_count = 0
+        bearish_count = 0
+        neutral_count = 0
+        
+        for i, token_data in enumerate(filtered_tokens):
+            try:
+                token_address = token_data.get('address')
+                symbol = token_data.get('symbol', 'Unknown')
+                source = token_data.get('discovery_source', 'unknown')
+                score = token_data.get('filter_score', 0)
+                
+                if not token_address:
+                    continue
+                
+                logger.info(f"📈 Token {i+1}/{len(filtered_tokens)}: {symbol}")
+                logger.info(f"   Address: {token_address}")
+                logger.info(f"   Source: {source}")
+                logger.info(f"   Filter Score: {score:.3f}")
+                
+                # Save token data to database
+                self.storage.save_token_data(
+                    token_address, 
+                    json.dumps(token_data), 
+                    source
                 )
-                self.stats["tokens_filtered"] += 1
-                return False
-
-            logger.info(
-                f"✅ Token {token_data.get('symbol', token_address[:8])} passed filters"
-            )
-
-            # Save token data
-            self.storage.save_token_data(
-                token_address,
-                json.dumps(token_data),
-                token_data.get("source", "discovery"),
-            )
-
-            # Perform technical analysis
-            prices = token_info["price_history"]
-            rsi = self.technicals.compute_rsi(prices)
-            slope = self.technicals.compute_ema_slope(prices)
-            upper_band, lower_band = self.technicals.compute_volatility_band(prices)
-            rating = self.technicals.classify_trend(
-                rsi, slope, prices, upper_band, lower_band
-            )
-
-            logger.info(
-                f"📊 Technical analysis for {token_data.get('symbol', token_address[:8])}: {rating} (RSI: {rsi:.2f})"
-            )
-
-            # Execute trade based on rating
-            if rating != "neutral":
-                self.trader.execute_trade(token_address, rating)
-                self.stats["trades_executed"] += 1
-
-            self.stats["tokens_processed"] += 1
-            return True
-
-        except Exception as e:
-            logger.error(
-                f"Error processing token {token_data.get('address', 'unknown')}: {e}"
-            )
-            return False
-
-    def _generate_mock_price_history(self, current_price: float) -> pd.Series:
-        """Generate mock price history for technical analysis"""
-        import random
-
-        # Generate 15 price points with some volatility
-        prices = []
-        price = current_price * 0.8  # Start 20% lower
-
-        for i in range(15):
-            # Add some random walk with slight upward bias
-            change = random.uniform(-0.05, 0.07)  # -5% to +7% change
-            price *= 1 + change
-            prices.append(price)
-
-        return pd.Series(prices)
-
+                
+                # Technical analysis
+                rating = self.analyze_token_technicals(token_data)
+                
+                # Update counters
+                if rating == "bullish":
+                    bullish_count += 1
+                elif rating == "bearish":
+                    bearish_count += 1
+                else:
+                    neutral_count += 1
+                
+                logger.info(f"   Rating: {rating.upper()}")
+                
+                # Additional context
+                volume = token_data.get('daily_volume_usd', 0)
+                price_change = token_data.get('price_change_24h', 0)
+                age_hours = token_data.get('age_hours', 'Unknown')
+                
+                logger.info(f"   Volume: ${volume:,.0f} | Change: {price_change:+.1f}% | Age: {age_hours}h")
+                
+                # Execute trading decision
+                if rating in ["bullish", "bearish"]:
+                    try:
+                        self.trader.execute_trade(token_address, rating)
+                        self.total_trades_executed += 1
+                        logger.info(f"   ✅ Trade executed: {rating}")
+                    except Exception as e:
+                        logger.error(f"   ❌ Trade failed: {str(e)}")
+                else:
+                    logger.info(f"   ⏸️  No trade: neutral rating")
+                
+                processed_count += 1
+                
+                # Add small delay to avoid overwhelming APIs
+                time.sleep(0.1)
+                
+            except Exception as e:
+                logger.error(f"Error processing token {token_data.get('symbol', 'unknown')}: {str(e)}")
+        
+        logger.info(f"✅ Processing complete:")
+        logger.info(f"   Processed: {processed_count} tokens")
+        logger.info(f"   Bullish: {bullish_count} | Bearish: {bearish_count} | Neutral: {neutral_count}")
+        logger.info(f"   Trades executed: {self.total_trades_executed}")
+    
     def monitor_smart_money(self):
-        """Monitor smart money activities"""
+        """Monitor smart money activity"""
         try:
-            logger.debug("👥 Monitoring smart money activities...")
+            logger.info("🧠 Monitoring smart money activity...")
             self.smart_tracker.monitor_smart_trades()
         except Exception as e:
-            logger.error(f"Smart money monitoring error: {e}")
-            self.stats["api_errors"] += 1
-
-    def print_statistics(self):
-        """Print bot statistics"""
-        runtime = time.time() - self.stats["start_time"]
-        runtime_hours = runtime / 3600
-
-        logger.info("📈 Bot Statistics:")
-        logger.info(f"  Runtime: {runtime_hours:.2f} hours")
-        logger.info(f"  Tokens processed: {self.stats['tokens_processed']}")
-        logger.info(f"  Tokens filtered out: {self.stats['tokens_filtered']}")
-        logger.info(f"  Trades executed: {self.stats['trades_executed']}")
-        logger.info(f"  API errors: {self.stats['api_errors']}")
-
-        if self.stats["tokens_processed"] > 0:
-            filter_rate = (
-                self.stats["tokens_filtered"]
-                / (self.stats["tokens_processed"] + self.stats["tokens_filtered"])
-            ) * 100
-            logger.info(f"  Filter rate: {filter_rate:.1f}%")
-
+            logger.error(f"Smart money monitoring failed: {str(e)}")
+    
+    def print_session_stats(self):
+        """Print overall session statistics"""
+        logger.info("=" * 60)
+        logger.info("SESSION STATISTICS")
+        logger.info("=" * 60)
+        logger.info(f"Cycles completed: {self.cycle_count}")
+        logger.info(f"Total tokens discovered: {self.total_tokens_discovered:,}")
+        logger.info(f"Total tokens filtered: {self.total_tokens_filtered:,}")
+        logger.info(f"Total trades executed: {self.total_trades_executed}")
+        
+        if self.cycle_count > 0:
+            avg_discovered = self.total_tokens_discovered / self.cycle_count
+            avg_filtered = self.total_tokens_filtered / self.cycle_count
+            filter_rate = (self.total_tokens_filtered / max(self.total_tokens_discovered, 1)) * 100
+            
+            logger.info(f"Average tokens per cycle: {avg_discovered:.0f} discovered, {avg_filtered:.0f} filtered")
+            logger.info(f"Filter success rate: {filter_rate:.1f}%")
+        
+        logger.info("=" * 60)
+    
+    def run_single_cycle(self):
+        """Run one complete discovery and trading cycle"""
+        cycle_start = time.time()
+        
+        try:
+            # 1. Discover and filter tokens
+            filtered_tokens = self.discover_and_filter_tokens()
+            
+            if not filtered_tokens:
+                logger.warning("⚠️  No tokens passed filtering this cycle")
+                return
+            
+            # 2. Process tokens for trading
+            self.process_tokens(filtered_tokens)
+            
+            # 3. Monitor smart money
+            self.monitor_smart_money()
+            
+            # 4. Cycle complete
+            cycle_time = time.time() - cycle_start
+            self.cycle_count += 1
+            
+            logger.info(f"🎯 Cycle {self.cycle_count} complete in {cycle_time:.1f}s")
+            
+        except Exception as e:
+            logger.error(f"Error in trading cycle: {str(e)}")
+            raise
+    
     def run(self):
         """Main bot loop"""
-        logger.info("🤖 Starting trading bot main loop...")
-        logger.info(f"Fetch interval: {FETCH_INTERVAL} seconds")
-
-        cycle_count = 0
-
+        logger.info("🚀 Starting Solana Memecoin Trading Bot")
+        logger.info(f"   Fetch interval: {FETCH_INTERVAL} seconds")
+        logger.info(f"   Database: {DB_PATH}")
+        
+        # Authenticate
+        self.authenticate()
+        
         try:
             while True:
-                cycle_start = time.time()
-                cycle_count += 1
-
-                logger.info(f"\n🔄 Starting cycle #{cycle_count}")
-
-                # Discover new tokens
-                discovered_tokens = self.discover_tokens()
-
-                # Process each token
-                processed_count = 0
-                for token_data in discovered_tokens:
-                    if self.process_token(token_data):
-                        processed_count += 1
-
-                logger.info(
-                    f"📊 Processed {processed_count}/{len(discovered_tokens)} tokens in cycle #{cycle_count}"
-                )
-
-                # Monitor smart money
-                self.monitor_smart_money()
-
-                # Print statistics every 10 cycles
-                if cycle_count % 10 == 0:
-                    self.print_statistics()
-
-                # Wait for next cycle
-                cycle_time = time.time() - cycle_start
-                sleep_time = max(0, FETCH_INTERVAL - cycle_time)
-
-                if sleep_time > 0:
-                    logger.info(
-                        f"💤 Cycle completed in {cycle_time:.2f}s, sleeping for {sleep_time:.2f}s"
-                    )
-                    time.sleep(sleep_time)
-                else:
-                    logger.warning(
-                        f"⚠️ Cycle took {cycle_time:.2f}s, longer than {FETCH_INTERVAL}s interval!"
-                    )
-
+                # Run trading cycle
+                self.run_single_cycle()
+                
+                # Print stats every 10 cycles
+                if self.cycle_count % 10 == 0:
+                    self.print_session_stats()
+                
+                # Sleep until next cycle
+                logger.info(f"😴 Sleeping for {FETCH_INTERVAL} seconds until next cycle...")
+                time.sleep(FETCH_INTERVAL)
+                
         except KeyboardInterrupt:
-            logger.info("\n⏹️ Bot stopped by user")
+            logger.info("\n🛑 Bot stopped by user")
+            self.print_session_stats()
         except Exception as e:
-            logger.error(f"💥 Fatal error in main loop: {e}")
+            logger.error(f"💥 Bot crashed: {str(e)}")
+            self.print_session_stats()
             raise
-        finally:
-            self.print_statistics()
-            logger.info("🏁 Trading bot shutdown complete")
-
 
 def main():
-    """Main entry point"""
-    try:
-        bot = TradingBot()
-        bot.run()
-    except Exception as e:
-        logger.error(f"Failed to start bot: {e}")
-        raise
-
+    """Entry point"""
+    bot = TradingBot()
+    bot.run()
 
 if __name__ == "__main__":
     main()

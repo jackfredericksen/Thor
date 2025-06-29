@@ -1,7 +1,7 @@
 # config.py - Enhanced configuration for comprehensive memecoin discovery
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 # API Keys - Most sources are public APIs that don't need keys!
 API_KEYS = {

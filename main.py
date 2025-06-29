@@ -4,7 +4,6 @@ import json
 import logging
 import time
 from typing import Dict, List
-
 import pandas as pd
 
 from api_clients.gmgn import GMGNClient
@@ -15,7 +14,8 @@ from smart_money import SmartMoneyTracker
 from storage import Storage
 from technicals import Technicals
 from trader import Trader
-
+import os
+os.environ['PYTHONIOENCODING'] = 'utf-8'
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,

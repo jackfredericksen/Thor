@@ -4,6 +4,24 @@ import logging
 from dataclasses import dataclass
 from utils.error_handling import safe_float, safe_int
 
+# Import config properly - this is the fix!
+try:
+    from config import config
+except ImportError:
+    # Fallback config if import fails
+    class FallbackConfig:
+        FILTERS = {
+            "max_volume_usd": 1_500_000,
+            "max_age_hours": 72,
+            "min_holders": 7_500,
+            "min_market_cap": 100_000,
+            "max_market_cap": 10_000_000,
+        }
+        TRADING = {
+            "min_liquidity_usd": 50_000,
+        }
+    config = FallbackConfig()
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -389,41 +407,18 @@ class TokenFilter:
             'warning': '; '.join(warnings) if warnings else None
         }
 
-def passes_filters(token_info):
+def passes_filters(token_info: Dict[str, Any], strict_mode: bool = False) -> bool:
     """
-    Filter tokens based on volume, age, and holder count
-    
-    Args:
-        token_info (dict): Token information containing:
-            - daily_volume_usd: 24h volume in USD
-            - age_hours: Token age in hours
-            - holder_count: Number of token holders
-    
-    Returns:
-        bool: True if token passes all filters
+    Legacy function for backward compatibility
+    Returns True if token passes basic filters
     """
-    try:
-        volume = float(token_info.get("daily_volume_usd", 0))
-        age_hours = float(token_info.get("age_hours", 9999))
-        holders = int(token_info.get("holder_count", 0))
-        
-        # Filter criteria:
-        # - Volume less than $1.5M (avoid overly hyped tokens)
-        # - Age less than 72 hours (focus on new tokens)
-        # - More than 7,500 holders (some traction)
-        volume_ok = volume < 1_500_000
-        age_ok = age_hours < 72
-        holders_ok = holders > 7_500
-        
-        return volume_ok and age_ok and holders_ok
-        
-    except (ValueError, TypeError):
-        # If any conversion fails, reject the token
-        return False
+    filter_system = TokenFilter()
+    result = filter_system.filter_token(token_info, strict_mode)
+    return result.passed
 
 def filter_tokens(tokens: List[Dict[str, Any]], 
-    strict_mode: bool = False,
-    min_score: float = 0.6) -> List[Dict[str, Any]]:
+                 strict_mode: bool = False,
+                 min_score: float = 0.6) -> List[Dict[str, Any]]:
     """
     Filter a list of tokens and return those that pass
     

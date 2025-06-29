@@ -4,7 +4,6 @@ import requests
 import time
 import random
 from typing import List, Dict, Optional
-from config import API_URLS, DEFAULT_HEADERS, GMGN_HEADERS, RATE_LIMITS
 
 
 class TokenDiscoveryError(Exception):
@@ -15,17 +14,15 @@ class TokenDiscoveryError(Exception):
 class TokenDiscoveryClient:
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update(DEFAULT_HEADERS)
-        
-        # Circuit breaker settings
-        self.failure_count = 0
-        self.circuit_open = False
-        self.last_failure_time = 0
-        self.circuit_timeout = RATE_LIMITS["circuit_breaker_timeout"]
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+        })
         
         # Rate limiting
         self.last_request_time = 0
-        self.min_request_interval = RATE_LIMITS["min_request_interval"]
+        self.min_request_interval = 2  # seconds between requests
         
     def _wait_for_rate_limit(self):
         """Implement rate limiting between requests"""
@@ -36,239 +33,228 @@ class TokenDiscoveryClient:
             time.sleep(sleep_time)
         self.last_request_time = time.time()
     
-    def _is_circuit_open(self) -> bool:
-        """Check if circuit breaker is open"""
-        if not self.circuit_open:
-            return False
-        
-        if time.time() - self.last_failure_time > self.circuit_timeout:
-            self.circuit_open = False
-            self.failure_count = 0
-            print("Circuit breaker reset - attempting requests again")
-            return False
-        
-        return True
-    
-    def _handle_failure(self, error_msg: str):
-        """Handle request failures for circuit breaker"""
-        self.failure_count += 1
-        self.last_failure_time = time.time()
-        
-        if self.failure_count >= RATE_LIMITS["circuit_breaker_threshold"]:
-            self.circuit_open = True
-            print(f"Circuit breaker OPEN after {self.failure_count} failures")
-        
-        raise TokenDiscoveryError(error_msg)
-    
-    def _make_request(self, url: str, params: Dict = None, custom_headers: Dict = None, retries: int = 3) -> Optional[Dict]:
-        """Make HTTP request with retries and error handling"""
-        if self._is_circuit_open():
-            raise TokenDiscoveryError("Circuit breaker OPEN for make_request")
-        
+    def _make_request(self, url: str, params: Dict = None, retries: int = 2) -> Optional[Dict]:
+        """Make HTTP request with retries"""
         self._wait_for_rate_limit()
-        
-        # Use custom headers if provided
-        headers = custom_headers or DEFAULT_HEADERS
         
         for attempt in range(retries):
             try:
                 if attempt > 0:
-                    delay = random.uniform(0.5, 2.0) * (2 ** attempt)
-                    print(f"_make_request attempt {attempt + 1} failed. Retrying in {delay:.2f} seconds...")
+                    delay = 1 + random.uniform(0, 1)
+                    print(f"Retrying in {delay:.2f} seconds...")
                     time.sleep(delay)
                 
-                response = self.session.get(url, params=params, headers=headers, timeout=30)
+                response = self.session.get(url, params=params, timeout=15)
                 
-                if response.status_code == 403:
-                    error_msg = f"token_discovery client error: {response.status_code} Client Error: Forbidden for url: {url}"
+                if response.status_code != 200:
+                    print(f"API returned {response.status_code} for {url}")
                     if attempt == retries - 1:
-                        self._handle_failure(error_msg)
+                        raise TokenDiscoveryError(f"API returned {response.status_code}")
                     continue
                 
-                if response.status_code == 404:
-                    error_msg = f"token_discovery client error: {response.status_code} Client Error: Not Found for url: {url}"
-                    if attempt == retries - 1:
-                        self._handle_failure(error_msg)
-                    continue
-                
-                if response.status_code == 503:
-                    error_msg = f"API returned {response.status_code}"
-                    print(error_msg)
-                    if attempt == retries - 1:
-                        self._handle_failure(error_msg)
-                    continue
-                
-                response.raise_for_status()
-                
-                # Try to parse JSON
-                try:
-                    data = response.json()
-                    # Reset failure count on success
-                    self.failure_count = 0
-                    return data
-                except ValueError as e:
-                    error_msg = f"token_discovery client error: {str(e)}"
-                    if attempt == retries - 1:
-                        self._handle_failure(error_msg)
-                    continue
+                return response.json()
                 
             except requests.exceptions.RequestException as e:
-                error_msg = f"token_discovery client error: {str(e)}"
                 if attempt == retries - 1:
-                    self._handle_failure(error_msg)
+                    raise TokenDiscoveryError(f"Request failed: {str(e)}")
         
         return None
     
     def discover_new_tokens(self) -> List[Dict]:
-        """Discover new tokens from multiple sources with fallback options"""
+        """Discover new tokens using only working APIs"""
         print("📡 Discovering new tokens...")
         all_tokens = []
         
-        # Try multiple sources in order of preference
+        # Try working sources in order of preference
         sources = [
-            self._get_dexscreener_tokens,
-            self._get_jupiter_tokens,
-            self._get_pumpfun_tokens,
-            self._get_gmgn_tokens,
-            self._get_mock_tokens
+            ("Jupiter Popular Tokens", self._get_jupiter_popular_tokens),
+            ("Dexscreener Search", self._get_dexscreener_search_tokens),
+            ("CoinGecko Trending", self._get_coingecko_trending),
         ]
         
-        for source_func in sources:
+        for source_name, source_func in sources:
             try:
+                print(f"🔍 Trying {source_name}...")
                 tokens = source_func()
                 if tokens:
+                    print(f"✅ Got {len(tokens)} tokens from {source_name}")
                     all_tokens.extend(tokens)
-                    print(f"✅ Got {len(tokens)} tokens from {source_func.__name__}")
-                    break  # If we get tokens from one source, use those
+                    # Get tokens from multiple sources
+                    if len(all_tokens) >= 10:  # Enough tokens
+                        break
             except Exception as e:
-                print(f"❌ {source_func.__name__} failed: {e}")
+                print(f"❌ {source_name} failed: {e}")
                 continue
         
-        if not all_tokens:
-            print("⚠️ All token sources failed, using mock data for testing")
+        # Remove duplicates based on address
+        seen_addresses = set()
+        unique_tokens = []
+        for token in all_tokens:
+            addr = token.get('address')
+            if addr and addr not in seen_addresses:
+                seen_addresses.add(addr)
+                unique_tokens.append(token)
+        
+        if not unique_tokens:
+            print("⚠️ All sources failed, using mock data")
             return self._get_mock_tokens()
         
-        return all_tokens
+        return unique_tokens[:15]  # Return top 15 tokens
     
-    def _get_dexscreener_tokens(self) -> List[Dict]:
-        """Get tokens from Dexscreener API using correct endpoint"""
+    def _get_jupiter_popular_tokens(self) -> List[Dict]:
+        """Get popular tokens from Jupiter token list"""
         try:
-            # Use the correct Dexscreener endpoint for Solana pairs
-            url = API_URLS["dexscreener_pairs"]
+            url = "https://token.jup.ag/strict"
             data = self._make_request(url)
             
-            if data and 'pairs' in data:
-                tokens = []
-                for pair in data['pairs'][:10]:  # Limit to 10 most recent
-                    base_token = pair.get('baseToken', {})
-                    if base_token.get('address'):
-                        tokens.append({
-                            'address': base_token.get('address'),
-                            'symbol': base_token.get('symbol'),
-                            'name': base_token.get('name'),
-                            'price': float(pair.get('priceUsd', 0)),
-                            'volume': float(pair.get('volume', {}).get('h24', 0)),
-                            'liquidity': float(pair.get('liquidity', {}).get('usd', 0)),
-                            'source': 'dexscreener'
-                        })
-                return tokens
-        except Exception as e:
-            raise TokenDiscoveryError(f"Dexscreener API error: {e}")
-        return []
-    
-    def _get_jupiter_tokens(self) -> List[Dict]:
-        """Get tokens from Jupiter token list"""
-        try:
-            url = API_URLS["jupiter_tokens"]
-            data = self._make_request(url)
+            if not data or not isinstance(data, list):
+                raise TokenDiscoveryError("Invalid Jupiter response")
             
-            if data and isinstance(data, list):
-                tokens = []
-                # Get some popular tokens from Jupiter list
-                for token in data[:10]:  # First 10 tokens
-                    tokens.append({
-                        'address': token.get('address'),
-                        'symbol': token.get('symbol'),
-                        'name': token.get('name'),
-                        'price': 0,  # Price not available from this endpoint
-                        'volume': 0,
-                        'market_cap': 0,
-                        'source': 'jupiter'
-                    })
-                return tokens
+            # Filter for Solana tokens with good metadata
+            tokens = []
+            for token in data:
+                # Skip if missing required fields
+                if not all([token.get('address'), token.get('symbol'), token.get('name')]):
+                    continue
+                
+                # Skip stablecoins and wrapped tokens for trading
+                symbol = token.get('symbol', '').upper()
+                if any(skip in symbol for skip in ['USD', 'USDT', 'USDC', 'WRAPPED', 'W']):
+                    continue
+                
+                # Skip tokens with very low decimals (likely NFTs or weird tokens)
+                decimals = token.get('decimals', 0)
+                if decimals < 6:
+                    continue
+                
+                tokens.append({
+                    'address': token.get('address'),
+                    'symbol': token.get('symbol'),
+                    'name': token.get('name'),
+                    'decimals': decimals,
+                    'price': 0,  # No price data from this endpoint
+                    'volume': 0,
+                    'source': 'jupiter'
+                })
+                
+                if len(tokens) >= 10:  # Limit to 10 tokens
+                    break
+            
+            return tokens
+            
         except Exception as e:
             raise TokenDiscoveryError(f"Jupiter API error: {e}")
-        return []
     
-    def _get_pumpfun_tokens(self) -> List[Dict]:
-        """Get tokens from Pump.fun API"""
+    def _get_dexscreener_search_tokens(self) -> List[Dict]:
+        """Get tokens from Dexscreener search (this works!)"""
         try:
-            url = API_URLS["pumpfun_new"]
-            params = {
-                'offset': 0,
-                'limit': 10,
-                'sort': 'created_timestamp',
-                'order': 'DESC'
-            }
-            data = self._make_request(url, params)
+            # Search for popular terms to find active tokens
+            search_terms = ['SOL', 'BONK', 'RAY', 'ORCA']
+            all_tokens = []
             
-            if data and isinstance(data, list):
-                tokens = []
-                for token in data[:10]:
-                    total_supply = float(token.get('total_supply', 1))
-                    market_cap = float(token.get('usd_market_cap', 0))
-                    price = market_cap / total_supply if total_supply > 0 else 0
+            for term in search_terms:
+                url = "https://api.dexscreener.com/latest/dex/search"
+                params = {'q': term}
+                data = self._make_request(url, params)
+                
+                if data and 'pairs' in data:
+                    pairs = data['pairs'][:5]  # Take first 5 pairs per search
                     
-                    tokens.append({
-                        'address': token.get('mint'),
-                        'symbol': token.get('symbol'),
-                        'name': token.get('name'),
-                        'price': price,
-                        'volume': float(token.get('volume_24h', 0)),
-                        'market_cap': market_cap,
-                        'source': 'pumpfun'
-                    })
-                return tokens
-        except Exception as e:
-            raise TokenDiscoveryError(f"Pump.fun API error: {e}")
-        return []
-    
-    def _get_gmgn_tokens(self) -> List[Dict]:
-        """Get tokens from GMGN API using correct endpoints"""
-        try:
-            # Try the new pairs endpoint first
-            url = API_URLS["gmgn_new_pairs"]
-            data = self._make_request(url, custom_headers=GMGN_HEADERS)
+                    for pair in pairs:
+                        base_token = pair.get('baseToken', {})
+                        if base_token.get('address'):
+                            # Get volume and price data
+                            volume_24h = float(pair.get('volume', {}).get('h24', 0))
+                            price_usd = float(pair.get('priceUsd', 0))
+                            liquidity = float(pair.get('liquidity', {}).get('usd', 0))
+                            
+                            # Only include tokens with decent volume and liquidity
+                            if volume_24h > 1000 and liquidity > 5000:
+                                all_tokens.append({
+                                    'address': base_token.get('address'),
+                                    'symbol': base_token.get('symbol'),
+                                    'name': base_token.get('name'),
+                                    'price': price_usd,
+                                    'volume': volume_24h,
+                                    'liquidity': liquidity,
+                                    'source': 'dexscreener'
+                                })
+                
+                time.sleep(0.5)  # Small delay between searches
             
-            if data and 'data' in data:
-                tokens = []
-                token_list = data['data']
-                if isinstance(token_list, list):
-                    for token in token_list[:10]:
-                        tokens.append({
-                            'address': token.get('address') or token.get('mint'),
-                            'symbol': token.get('symbol'),
-                            'name': token.get('name'),
-                            'price': float(token.get('price', 0)),
-                            'volume': float(token.get('volume_24h', 0)),
-                            'market_cap': float(token.get('market_cap', 0)),
-                            'source': 'gmgn'
-                        })
-                    return tokens
+            # Sort by volume and return top tokens
+            all_tokens.sort(key=lambda x: x['volume'], reverse=True)
+            return all_tokens[:8]  # Top 8 by volume
+            
         except Exception as e:
-            raise TokenDiscoveryError(f"GMGN API error: {e}")
-        return []
+            raise TokenDiscoveryError(f"Dexscreener search error: {e}")
+    
+    def _get_coingecko_trending(self) -> List[Dict]:
+        """Get trending tokens from CoinGecko"""
+        try:
+            url = "https://api.coingecko.com/api/v3/search/trending"
+            data = self._make_request(url)
+            
+            if not data or 'coins' not in data:
+                raise TokenDiscoveryError("Invalid CoinGecko response")
+            
+            tokens = []
+            for coin_data in data['coins'][:5]:  # Top 5 trending
+                coin = coin_data.get('item', {})
+                
+                # CoinGecko doesn't always have Solana addresses, so we'll use what we can
+                tokens.append({
+                    'address': f"coingecko_{coin.get('id', 'unknown')}",  # Placeholder address
+                    'symbol': coin.get('symbol'),
+                    'name': coin.get('name'),
+                    'price': 0,  # Would need separate price API call
+                    'volume': 0,
+                    'market_cap_rank': coin.get('market_cap_rank', 999),
+                    'source': 'coingecko_trending'
+                })
+            
+            return tokens
+            
+        except Exception as e:
+            raise TokenDiscoveryError(f"CoinGecko trending error: {e}")
     
     def _get_mock_tokens(self) -> List[Dict]:
-        """Return mock tokens for testing when all APIs fail"""
+        """Return high-quality mock tokens for testing"""
         return [
             {
                 'address': 'So11111111111111111111111111111111111112',
                 'symbol': 'SOL',
                 'name': 'Solana',
-                'price': 100.50,
-                'volume': 50000000,
-                'market_cap': 40000000000,
+                'price': 98.50,
+                'volume': 45000000,
+                'liquidity': 25000000,
+                'source': 'mock'
+            },
+            {
+                'address': '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+                'symbol': 'RAY',
+                'name': 'Raydium',
+                'price': 2.15,
+                'volume': 8500000,
+                'liquidity': 12000000,
+                'source': 'mock'
+            },
+            {
+                'address': 'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',
+                'symbol': 'ORCA',
+                'name': 'Orca',
+                'price': 1.45,
+                'volume': 3200000,
+                'liquidity': 8500000,
+                'source': 'mock'
+            },
+            {
+                'address': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+                'symbol': 'BONK',
+                'name': 'Bonk',
+                'price': 0.0000125,
+                'volume': 15000000,
+                'liquidity': 5500000,
                 'source': 'mock'
             },
             {
@@ -276,17 +262,35 @@ class TokenDiscoveryClient:
                 'symbol': 'USDC',
                 'name': 'USD Coin',
                 'price': 1.00,
-                'volume': 100000000,
-                'market_cap': 25000000000,
-                'source': 'mock'
-            },
-            {
-                'address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-                'symbol': 'USDT',
-                'name': 'Tether USD',
-                'price': 1.00,
-                'volume': 80000000,
-                'market_cap': 95000000000,
+                'volume': 85000000,
+                'liquidity': 45000000,
                 'source': 'mock'
             }
         ]
+    
+    def get_token_details(self, token_address: str) -> Optional[Dict]:
+        """Get detailed information about a specific token"""
+        try:
+            # Try Dexscreener search for the specific token
+            url = "https://api.dexscreener.com/latest/dex/search"
+            params = {'q': token_address}
+            data = self._make_request(url, params)
+            
+            if data and 'pairs' in data and data['pairs']:
+                pair = data['pairs'][0]  # Take first match
+                base_token = pair.get('baseToken', {})
+                
+                return {
+                    'address': base_token.get('address'),
+                    'symbol': base_token.get('symbol'),
+                    'name': base_token.get('name'),
+                    'price': float(pair.get('priceUsd', 0)),
+                    'volume': float(pair.get('volume', {}).get('h24', 0)),
+                    'liquidity': float(pair.get('liquidity', {}).get('usd', 0)),
+                    'price_change_24h': float(pair.get('priceChange', {}).get('h24', 0)),
+                    'source': 'dexscreener_detail'
+                }
+        except Exception as e:
+            print(f"Error getting token details: {e}")
+        
+        return None

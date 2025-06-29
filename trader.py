@@ -1,14 +1,35 @@
 # trader.py
-import time
-from typing import Dict, Optional, List
 import logging
+import time
 from datetime import datetime
+from typing import Dict, List, Optional
+
 from risk_management import RiskManager
-from utils.error_handling import (
-    exponential_backoff, InsufficientFundsException, 
-    InvalidTokenException, APIException
-)
-from config import config
+from utils.error_handling import (APIException, InsufficientFundsException,
+                                  InvalidTokenException, exponential_backoff)
+
+# Import config properly - this is the fix!
+try:
+    # Import config properly - this is the fix!
+try:
+    from config import config
+except ImportError:
+    # Fallback config if import fails
+    class FallbackConfig:
+        API_URLS = {}
+        API_KEYS = {}
+        RATE_LIMITS = {}
+        TRADING = {"paper_trading": True}
+        FILTERS = {}
+    config = FallbackConfig()
+except ImportError:
+    # Fallback config if import fails
+    class FallbackConfig:
+        TRADING = {
+            "paper_trading": True,
+            "default_slippage": 0.02,
+        }
+    config = FallbackConfig()
 
 logger = logging.getLogger(__name__)
 trading_logger = logging.getLogger('trading')

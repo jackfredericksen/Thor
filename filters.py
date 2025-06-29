@@ -1,12 +1,24 @@
 # filters.py
-from typing import Dict, List, Optional, Any, Callable
 import logging
 from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
+
 from utils.error_handling import safe_float, safe_int
 
 # Import config properly - this is the fix!
 try:
+    # Import config properly - this is the fix!
+try:
     from config import config
+except ImportError:
+    # Fallback config if import fails
+    class FallbackConfig:
+        API_URLS = {}
+        API_KEYS = {}
+        RATE_LIMITS = {}
+        TRADING = {"paper_trading": True}
+        FILTERS = {}
+    config = FallbackConfig()
 except ImportError:
     # Fallback config if import fails
     class FallbackConfig:

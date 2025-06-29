@@ -15,20 +15,16 @@ API_URLS = {
     "dexscreener_pairs": "https://api.dexscreener.com/latest/dex/pairs/solana",
     "dexscreener_search": "https://api.dexscreener.com/latest/dex/search",
     "dexscreener_token": "https://api.dexscreener.com/latest/dex/tokens",
-    
     # GMGN.ai - Open endpoints (bypass Cloudflare with proper headers)
     "gmgn_trending": "https://gmgn.ai/defi/quotation/v1/tokens/top_gainers/sol",
     "gmgn_new_pairs": "https://gmgn.ai/defi/quotation/v1/tokens/new_pools/sol",
     "gmgn_smart_money": "https://gmgn.ai/defi/quotation/v1/smartmoney/sol/wallets",
-    
     # Pump.fun - Public API
     "pumpfun_new": "https://frontend-api.pump.fun/coins",
     "pumpfun_trending": "https://frontend-api.pump.fun/coins/trending",
-    
     # Jupiter - Token list and prices
     "jupiter_tokens": "https://token.jup.ag/strict",
     "jupiter_price": "https://price.jup.ag/v4/price",
-    
     # Backup sources
     "coingecko_trending": "https://api.coingecko.com/api/v3/search/trending",
     "birdeye_tokens": "https://public-api.birdeye.so/public/tokenlist",
@@ -72,34 +68,40 @@ TRADING_CONFIG = {
 SMART_MONEY_CONFIG = {
     "min_trade_value_usd": 1000,
     "tracking_keywords": [
-        "early investor", "insider", "whale", "vc", 
-        "founder", "team", "advisor", "angel"
+        "early investor",
+        "insider",
+        "whale",
+        "vc",
+        "founder",
+        "team",
+        "advisor",
+        "angel",
     ],
     "min_wallet_success_rate": 0.6,  # 60% success rate
 }
 
 # Request Headers (Important for bypassing basic bot detection)
 DEFAULT_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'DNT': '1',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'cross-site',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache'
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "DNT": "1",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "cross-site",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
 # Specific headers for GMGN (to bypass Cloudflare)
 GMGN_HEADERS = {
     **DEFAULT_HEADERS,
-    'Referer': 'https://gmgn.ai/',
-    'Origin': 'https://gmgn.ai',
-    'Sec-Fetch-Site': 'same-origin',
+    "Referer": "https://gmgn.ai/",
+    "Origin": "https://gmgn.ai",
+    "Sec-Fetch-Site": "same-origin",
 }
 
 # Error Handling Configuration
@@ -118,6 +120,7 @@ LOGGING_CONFIG = {
     "backup_count": 5,
 }
 
+
 def get_headers_for_url(url: str) -> dict:
     """
     Get appropriate headers for different URLs
@@ -126,6 +129,7 @@ def get_headers_for_url(url: str) -> dict:
         return GMGN_HEADERS
     else:
         return DEFAULT_HEADERS
+
 
 def get_working_endpoints() -> dict:
     """
@@ -137,6 +141,7 @@ def get_working_endpoints() -> dict:
         "pumpfun_new": API_URLS["pumpfun_new"],
         "coingecko_trending": API_URLS["coingecko_trending"],
     }
+
 
 def get_priority_endpoints() -> list:
     """
@@ -150,26 +155,28 @@ def get_priority_endpoints() -> list:
         ("CoinGecko", API_URLS["coingecko_trending"]),
     ]
 
+
 def validate_config() -> list:
     """
     Validate configuration and return warnings
     """
     warnings = []
-    
+
     # Check database path
     db_dir = os.path.dirname(DB_PATH) if os.path.dirname(DB_PATH) else "."
     if not os.path.exists(db_dir):
         warnings.append(f"Database directory does not exist: {db_dir}")
-    
+
     # Check fetch interval
     if FETCH_INTERVAL < 5:
         warnings.append("Fetch interval very low - may cause rate limiting")
-    
+
     # Check if wallet is configured for actual trading
     if not API_KEYS["wallet_address"]:
         warnings.append("Wallet address not configured - trading will be simulated")
-    
+
     return warnings
+
 
 # Network configuration for Solana
 SOLANA_CONFIG = {
@@ -181,7 +188,7 @@ SOLANA_CONFIG = {
 # Known token addresses for reference
 KNOWN_TOKENS = {
     "SOL": "So11111111111111111111111111111111111112",
-    "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 
+    "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     "USDT": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
     "RAY": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
     "SRM": "SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt",
@@ -191,7 +198,7 @@ if __name__ == "__main__":
     # Test configuration when run directly
     print("🔧 Configuration Test")
     print("=" * 40)
-    
+
     warnings = validate_config()
     if warnings:
         print("⚠️ Warnings:")
@@ -199,12 +206,12 @@ if __name__ == "__main__":
             print(f"  - {warning}")
     else:
         print("✅ Configuration looks good!")
-    
+
     print(f"\n📊 Settings:")
     print(f"  Database: {DB_PATH}")
     print(f"  Fetch Interval: {FETCH_INTERVAL}s")
     print(f"  Rate Limit: {RATE_LIMITS['requests_per_minute']} req/min")
-    
+
     print(f"\n🔗 Available Endpoints:")
     for name, url in get_working_endpoints().items():
         print(f"  {name}: {url}")

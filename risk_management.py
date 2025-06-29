@@ -1,11 +1,38 @@
 # risk_management.py
-from typing import Dict, List, Optional, Tuple
 import logging
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import threading
-from utils.error_handling import safe_float, InsufficientFundsException
-from config import config
+from typing import Dict, List, Optional, Tuple
+
+from utils.error_handling import InsufficientFundsException, safe_float
+
+# Import config properly - this is the fix!
+try:
+    # Import config properly - this is the fix!
+try:
+    from config import config
+except ImportError:
+    # Fallback config if import fails
+    class FallbackConfig:
+        API_URLS = {}
+        API_KEYS = {}
+        RATE_LIMITS = {}
+        TRADING = {"paper_trading": True}
+        FILTERS = {}
+    config = FallbackConfig()
+except ImportError:
+    # Fallback config if import fails
+    class FallbackConfig:
+        TRADING = {
+            "max_position_size_usd": 1000,
+            "max_total_exposure_usd": 10000,
+            "stop_loss_pct": 0.15,
+            "take_profit_pct": 0.50,
+            "paper_trading": True,
+            "min_liquidity_usd": 50000,
+        }
+    config = FallbackConfig()
 
 logger = logging.getLogger(__name__)
 

@@ -1,207 +1,210 @@
 # config.py
+
 import os
-from typing import Dict, Any
-import logging
 
-class Config:
-    """Centralized configuration management with validation"""
+# API Keys - Only for services that actually require them
+API_KEYS = {
+    "telegram_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),  # Optional for notifications
+    "wallet_private_key": os.getenv("WALLET_PRIVATE_KEY", ""),  # For actual trading
+    "wallet_address": os.getenv("WALLET_ADDRESS", ""),  # Your wallet address
+}
+
+# Open API URLs (No authentication required)
+API_URLS = {
+    # Dexscreener - Open API, no key needed
+    "dexscreener_pairs": "https://api.dexscreener.com/latest/dex/pairs/solana",
+    "dexscreener_search": "https://api.dexscreener.com/latest/dex/search",
+    "dexscreener_token": "https://api.dexscreener.com/latest/dex/tokens",
     
-    def __init__(self):
-        self.validate_config()
+    # GMGN.ai - Open endpoints (bypass Cloudflare with proper headers)
+    "gmgn_trending": "https://gmgn.ai/defi/quotation/v1/tokens/top_gainers/sol",
+    "gmgn_new_pairs": "https://gmgn.ai/defi/quotation/v1/tokens/new_pools/sol",
+    "gmgn_smart_money": "https://gmgn.ai/defi/quotation/v1/smartmoney/sol/wallets",
     
-    # API Configuration - Updated based on actual requirements
-    API_KEYS = {
-        # FREE PUBLIC APIs - No keys required
-        "dexscreener": "",  # DexScreener is completely free and public
-        "gmgn": "",  # GMGN is free to use, no API key needed
-        "pumpfun": "",  # Pump.fun data is accessible through public endpoints
-        
-        # APIs that REQUIRE keys/registration
-        "rugcheck": os.getenv("RUGCHECK_API_KEY", ""),  # Requires API key from rugcheck.xyz
-        "moni": os.getenv("MONI_API_KEY", ""),  # Requires paid subscription ($99+/month)
-        "bubblemaps": os.getenv("BUBBLEMAPS_API_KEY", ""),  # May require API key for advanced features
-        
-        # Trading/Wallet Configuration (REQUIRED for live trading)
-        "wallet_address": os.getenv("WALLET_ADDRESS", ""),
-        "wallet_private_key": os.getenv("WALLET_PRIVATE_KEY", ""),
-        "telegram_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),  # For GMGN integration
-    }
-
-    API_URLS = {
-        # Free public APIs
-        "dexscreener": "https://api.dexscreener.com",  # Correct base URL
-        "gmgn": "https://gmgn.ai/defi/router/v1",  # Free trading API
-        "pumpfun": "https://pumpportal.fun/api",  # Third-party free API
-        
-        # Paid/Key-required APIs
-        "rugcheck": "https://api.rugcheck.xyz",
-        "moni": "https://api-service.getmoni.io/v1",
-        "bubblemaps": "https://api.bubblemaps.io/v1",
-    }
-
-    # API Status - Which APIs actually need keys
-    API_REQUIREMENTS = {
-        "dexscreener": {
-            "requires_key": False,
-            "cost": "Free",
-            "rate_limit": "300 requests per minute (estimated)",
-            "features": ["Token data", "Price history", "Trending tokens", "New pairs"]
-        },
-        "gmgn": {
-            "requires_key": False,
-            "cost": "Free",
-            "rate_limit": "No official limit",
-            "features": ["Trading", "Smart money tracking", "Token info", "Wallet analysis"]
-        },
-        "pumpfun": {
-            "requires_key": False,  # Data API is free
-            "cost": "Free for data, 0.5% fee for trading",
-            "rate_limit": "No official limit for data",
-            "features": ["Token data", "New tokens", "Trading (with fee)"]
-        },
-        "rugcheck": {
-            "requires_key": True,
-            "cost": "Paid API",
-            "rate_limit": "Varies by plan",
-            "features": ["Token security analysis", "Rug pull detection"]
-        },
-        "moni": {
-            "requires_key": True,
-            "cost": "$99+/month",
-            "rate_limit": "Varies by plan", 
-            "features": ["Social sentiment", "Twitter analysis", "Alpha discovery"]
-        },
-        "bubblemaps": {
-            "requires_key": False,  # Basic features are free
-            "cost": "Free basic, premium requires 250B MOONLIGHT tokens (~$1400)",
-            "rate_limit": "Limited for free tier",
-            "features": ["Wallet visualization", "Holder analysis", "Connection mapping"]
-        }
-    }
-
-    # Trading Configuration
-    TRADING = {
-        "max_position_size_usd": float(os.getenv("MAX_POSITION_SIZE_USD", "1000")),
-        "max_total_exposure_usd": float(os.getenv("MAX_TOTAL_EXPOSURE_USD", "10000")),
-        "default_slippage": float(os.getenv("DEFAULT_SLIPPAGE", "0.02")),
-        "stop_loss_pct": float(os.getenv("STOP_LOSS_PCT", "0.15")),
-        "take_profit_pct": float(os.getenv("TAKE_PROFIT_PCT", "0.50")),
-        "paper_trading": os.getenv("PAPER_TRADING", "true").lower() == "true",
-        "min_liquidity_usd": float(os.getenv("MIN_LIQUIDITY_USD", "50000")),
-    }
-
-    # Filter Configuration
-    FILTERS = {
-        "max_volume_usd": float(os.getenv("MAX_VOLUME_USD", "1500000")),
-        "max_age_hours": float(os.getenv("MAX_AGE_HOURS", "72")),
-        "min_holders": int(os.getenv("MIN_HOLDERS", "7500")),
-        "min_market_cap": float(os.getenv("MIN_MARKET_CAP", "100000")),
-        "max_market_cap": float(os.getenv("MAX_MARKET_CAP", "10000000")),
-    }
-
-    # Rate Limiting (estimated based on public info)
-    RATE_LIMITS = {
-        "dexscreener": int(os.getenv("DEXSCREENER_RATE_LIMIT", "300")),  # Generous estimate
-        "gmgn": int(os.getenv("GMGN_RATE_LIMIT", "120")),  # Conservative estimate
-        "pumpfun": int(os.getenv("PUMPFUN_RATE_LIMIT", "60")),  # Conservative estimate
-        "rugcheck": int(os.getenv("RUGCHECK_RATE_LIMIT", "10")),  # Very conservative for paid API
-        "moni": int(os.getenv("MONI_RATE_LIMIT", "30")),  # Conservative for paid API
-        "bubblemaps": int(os.getenv("BUBBLEMAPS_RATE_LIMIT", "20")),  # Conservative estimate
-    }
-
-    # System Configuration
-    DB_PATH = os.getenv("DB_PATH", "dex_bot.db")
-    FETCH_INTERVAL = int(os.getenv("FETCH_INTERVAL", "15"))
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    LOG_FILE = os.getenv("LOG_FILE", "dex_bot.log")
+    # Pump.fun - Public API
+    "pumpfun_new": "https://frontend-api.pump.fun/coins",
+    "pumpfun_trending": "https://frontend-api.pump.fun/coins/trending",
     
-    # Technical Analysis
-    TECHNICAL = {
-        "rsi_period": int(os.getenv("RSI_PERIOD", "14")),
-        "ema_period": int(os.getenv("EMA_PERIOD", "14")),
-        "bb_period": int(os.getenv("BB_PERIOD", "20")),
-        "bb_std": float(os.getenv("BB_STD", "2.0")),
-        "rsi_oversold": float(os.getenv("RSI_OVERSOLD", "30")),
-        "rsi_overbought": float(os.getenv("RSI_OVERBOUGHT", "70")),
+    # Jupiter - Token list and prices
+    "jupiter_tokens": "https://token.jup.ag/strict",
+    "jupiter_price": "https://price.jup.ag/v4/price",
+    
+    # Backup sources
+    "coingecko_trending": "https://api.coingecko.com/api/v3/search/trending",
+    "birdeye_tokens": "https://public-api.birdeye.so/public/tokenlist",
+}
+
+# Bot Configuration
+DB_PATH = os.getenv("DB_PATH", "dex_bot.db")
+FETCH_INTERVAL = int(os.getenv("FETCH_INTERVAL", "15"))  # seconds
+
+# Rate Limiting Configuration (be respectful to free APIs)
+RATE_LIMITS = {
+    "requests_per_minute": 20,  # Conservative for free APIs
+    "min_request_interval": 3,  # 3 seconds between requests
+    "burst_limit": 3,
+    "circuit_breaker_threshold": 5,
+    "circuit_breaker_timeout": 300,  # 5 minutes
+}
+
+# Token Filtering Configuration
+FILTER_CONFIG = {
+    "max_volume_usd": 1_500_000,
+    "max_age_hours": 72,
+    "min_holders": 7_500,
+    "min_liquidity_usd": 10_000,
+    "blacklisted_symbols": ["SCAM", "TEST", "FAKE", "DEAD"],
+    "min_market_cap": 50_000,  # $50k minimum
+    "max_market_cap": 10_000_000,  # $10M maximum
+}
+
+# Trading Configuration
+TRADING_CONFIG = {
+    "max_slippage": 0.02,  # 2%
+    "position_size_usd": 100,
+    "max_positions": 10,
+    "stop_loss_percent": 0.15,  # 15%
+    "take_profit_percent": 0.50,  # 50%
+    "min_trade_amount": 10,  # $10 minimum
+}
+
+# Smart Money Configuration
+SMART_MONEY_CONFIG = {
+    "min_trade_value_usd": 1000,
+    "tracking_keywords": [
+        "early investor", "insider", "whale", "vc", 
+        "founder", "team", "advisor", "angel"
+    ],
+    "min_wallet_success_rate": 0.6,  # 60% success rate
+}
+
+# Request Headers (Important for bypassing basic bot detection)
+DEFAULT_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'cross-site',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
+}
+
+# Specific headers for GMGN (to bypass Cloudflare)
+GMGN_HEADERS = {
+    **DEFAULT_HEADERS,
+    'Referer': 'https://gmgn.ai/',
+    'Origin': 'https://gmgn.ai',
+    'Sec-Fetch-Site': 'same-origin',
+}
+
+# Error Handling Configuration
+ERROR_CONFIG = {
+    "max_retries": 3,
+    "retry_delays": [1, 2, 4],  # seconds
+    "timeout_seconds": 30,
+    "log_level": os.getenv("LOG_LEVEL", "INFO"),
+}
+
+# Logging Configuration
+LOGGING_CONFIG = {
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "bot.log",
+    "max_size_mb": 10,
+    "backup_count": 5,
+}
+
+def get_headers_for_url(url: str) -> dict:
+    """
+    Get appropriate headers for different URLs
+    """
+    if "gmgn.ai" in url:
+        return GMGN_HEADERS
+    else:
+        return DEFAULT_HEADERS
+
+def get_working_endpoints() -> dict:
+    """
+    Return endpoints that are known to work reliably
+    """
+    return {
+        "dexscreener_pairs": API_URLS["dexscreener_pairs"],
+        "jupiter_tokens": API_URLS["jupiter_tokens"],
+        "pumpfun_new": API_URLS["pumpfun_new"],
+        "coingecko_trending": API_URLS["coingecko_trending"],
     }
 
-    # Feature toggles based on available APIs
-    FEATURES = {
-        "enable_rugcheck": bool(API_KEYS["rugcheck"]),  # Only if API key provided
-        "enable_moni_sentiment": bool(API_KEYS["moni"]),  # Only if API key provided
-        "enable_bubblemaps": True,  # Always available (free tier)
-        "enable_smart_money_tracking": True,  # GMGN is free
-        "enable_pump_fun": True,  # Free data API
-    }
+def get_priority_endpoints() -> list:
+    """
+    Return endpoints in order of reliability/preference
+    """
+    return [
+        ("Dexscreener", API_URLS["dexscreener_pairs"]),
+        ("Jupiter", API_URLS["jupiter_tokens"]),
+        ("Pump.fun", API_URLS["pumpfun_new"]),
+        ("GMGN New Pairs", API_URLS["gmgn_new_pairs"]),
+        ("CoinGecko", API_URLS["coingecko_trending"]),
+    ]
 
-    def validate_config(self):
-        """Validate critical configuration parameters"""
-        # Only require wallet address for live trading
-        if not self.TRADING["paper_trading"]:
-            if not self.API_KEYS.get("wallet_address"):
-                raise ValueError("WALLET_ADDRESS required for live trading")
-        
-        if self.TRADING["max_position_size_usd"] <= 0:
-            raise ValueError("MAX_POSITION_SIZE_USD must be positive")
-        
-        if self.TRADING["max_total_exposure_usd"] <= 0:
-            raise ValueError("MAX_TOTAL_EXPOSURE_USD must be positive")
+def validate_config() -> list:
+    """
+    Validate configuration and return warnings
+    """
+    warnings = []
+    
+    # Check database path
+    db_dir = os.path.dirname(DB_PATH) if os.path.dirname(DB_PATH) else "."
+    if not os.path.exists(db_dir):
+        warnings.append(f"Database directory does not exist: {db_dir}")
+    
+    # Check fetch interval
+    if FETCH_INTERVAL < 5:
+        warnings.append("Fetch interval very low - may cause rate limiting")
+    
+    # Check if wallet is configured for actual trading
+    if not API_KEYS["wallet_address"]:
+        warnings.append("Wallet address not configured - trading will be simulated")
+    
+    return warnings
 
-    def get_enabled_apis(self) -> Dict[str, Dict]:
-        """Get list of enabled APIs with their status"""
-        enabled_apis = {}
-        
-        for api_name, requirements in self.API_REQUIREMENTS.items():
-            if requirements["requires_key"]:
-                # Check if API key is provided
-                api_key = self.API_KEYS.get(api_name)
-                enabled = bool(api_key)
-                status = "Enabled" if enabled else "Disabled (no API key)"
-            else:
-                # Free APIs are always enabled
-                enabled = True
-                status = "Enabled (free)"
-            
-            enabled_apis[api_name] = {
-                "enabled": enabled,
-                "status": status,
-                "cost": requirements["cost"],
-                "features": requirements["features"]
-            }
-        
-        return enabled_apis
+# Network configuration for Solana
+SOLANA_CONFIG = {
+    "rpc_url": os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"),
+    "ws_url": os.getenv("SOLANA_WS_URL", "wss://api.mainnet-beta.solana.com"),
+    "commitment": "confirmed",
+}
 
-    def print_api_status(self):
-        """Print status of all APIs"""
-        print("\n" + "="*60)
-        print("API CONFIGURATION STATUS")
-        print("="*60)
-        
-        enabled_apis = self.get_enabled_apis()
-        
-        for api_name, info in enabled_apis.items():
-            status_color = "✅" if info["enabled"] else "❌"
-            print(f"{status_color} {api_name.upper()}")
-            print(f"   Status: {info['status']}")
-            print(f"   Cost: {info['cost']}")
-            print(f"   Features: {', '.join(info['features'])}")
-            print()
-        
-        print("SUMMARY:")
-        enabled_count = sum(1 for api in enabled_apis.values() if api["enabled"])
-        total_count = len(enabled_apis)
-        print(f"Enabled APIs: {enabled_count}/{total_count}")
-        
-        if not enabled_apis["rugcheck"]["enabled"]:
-            print("⚠️  Rugcheck disabled - token security analysis unavailable")
-        if not enabled_apis["moni"]["enabled"]:
-            print("⚠️  Moni disabled - social sentiment analysis unavailable")
-        
-        print("="*60)
+# Known token addresses for reference
+KNOWN_TOKENS = {
+    "SOL": "So11111111111111111111111111111111111112",
+    "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 
+    "USDT": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+    "RAY": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+    "SRM": "SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt",
+}
 
-# Global config instance
-config = Config()
-
-# Print API status when config is loaded
 if __name__ == "__main__":
-    config.print_api_status()
+    # Test configuration when run directly
+    print("🔧 Configuration Test")
+    print("=" * 40)
+    
+    warnings = validate_config()
+    if warnings:
+        print("⚠️ Warnings:")
+        for warning in warnings:
+            print(f"  - {warning}")
+    else:
+        print("✅ Configuration looks good!")
+    
+    print(f"\n📊 Settings:")
+    print(f"  Database: {DB_PATH}")
+    print(f"  Fetch Interval: {FETCH_INTERVAL}s")
+    print(f"  Rate Limit: {RATE_LIMITS['requests_per_minute']} req/min")
+    
+    print(f"\n🔗 Available Endpoints:")
+    for name, url in get_working_endpoints().items():
+        print(f"  {name}: {url}")

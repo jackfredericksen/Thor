@@ -20,44 +20,117 @@ class DexscreenerClient(BaseAPIClient):
     
     def fetch_trending_tokens(self, chain: str = "solana", limit: int = 50) -> List[Dict]:
         """
-        Fetch tokens using available DexScreener endpoints
-        Note: DexScreener doesn't have a direct trending endpoint
+        Fetch actual new/trending tokens from DexScreener
+        Since DexScreener doesn't have a direct trending API, we'll use a different approach
         """
         try:
-            # Since there's no trending endpoint, we'll get new pairs instead
-            # which often contain trending/new tokens
-            return self.fetch_new_pairs(chain, limit)
+            # Strategy: Use search functionality with popular terms to find new tokens
+            # This mimics how users would discover new tokens
+            
+            all_tokens = []
+            
+            # Search for recently active Solana pairs using different strategies
+            search_terms = ["sol", "pump", "meme", "doge", "shib", "pepe"]
+            
+            for term in search_terms[:3]:  # Limit to avoid rate limits
+                try:
+                    search_results = self.search_tokens(term, chain)
+                    # Filter for recent tokens (created in last 7 days)
+                    recent_tokens = [
+                        token for token in search_results 
+                        if token.get('age_hours', 9999) < 168  # 7 days
+                    ]
+                    all_tokens.extend(recent_tokens)
+                    
+                    if len(all_tokens) >= limit:
+                        break
+                        
+                except Exception as e:
+                    logger.warning(f"Search failed for term '{term}': {str(e)}")
+                    continue
+            
+            # Remove duplicates and sort by age (newest first)
+            unique_tokens = {}
+            for token in all_tokens:
+                address = token.get('address')
+                if address and address not in unique_tokens:
+                    unique_tokens[address] = token
+            
+            result = list(unique_tokens.values())
+            result.sort(key=lambda x: x.get('age_hours', 9999))  # Newest first
+            
+            logger.info(f"Found {len(result)} unique trending tokens")
+            return result[:limit]
             
         except Exception as e:
             logger.error(f"Failed to fetch trending tokens: {str(e)}")
             return []
     
+    def search_tokens(self, query: str, chain: str = "solana") -> List[Dict]:
+        """Search for tokens by name or symbol using DexScreener's search"""
+        try:
+            # DexScreener search endpoint (undocumented but exists)
+            # This is based on observing their website behavior
+            endpoint = "latest/dex/search"
+            params = {'q': query}
+            
+            response = self.get(endpoint, params)
+            pairs = response.get('pairs', [])
+            
+            processed_results = []
+            for pair in pairs:
+                # Only include Solana pairs
+                if pair.get('chainId') == chain:
+                    processed_pair = self._process_token_data(pair)
+                    if processed_pair:
+                        processed_results.append(processed_pair)
+            
+            logger.debug(f"Search for '{query}' returned {len(processed_results)} results")
+            return processed_results
+            
+        except Exception as e:
+            logger.warning(f"Search failed for '{query}': {str(e)}")
+            return []
+    
     def fetch_new_pairs(self, chain: str = "solana", limit: int = 50) -> List[Dict]:
         """
-        Fetch new trading pairs - this is the closest to 'trending' we can get
-        We'll use search functionality instead of a direct endpoint
+        Alternative method: Try to get pairs sorted by creation time
         """
         try:
-            # DexScreener's main endpoints are for specific tokens/pairs
-            # For now, let's use some popular Solana tokens as examples
-            popular_tokens = [
+            # Try multiple token addresses to get variety of recent pairs
+            recent_token_samples = [
+                # Add some known active token addresses as starting points
                 "So11111111111111111111111111111111111111112",  # SOL
                 "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  # USDC
-                "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",  # USDT
+                # We could add more diverse token addresses here
             ]
             
             all_pairs = []
-            for token_address in popular_tokens[:3]:  # Just get a few for testing
+            for token_address in recent_token_samples:
                 try:
                     pairs = self.get_pairs_for_token(token_address)
-                    all_pairs.extend(pairs)
-                    if len(all_pairs) >= limit:
-                        break
+                    # Filter for newer pairs (less than 30 days old)
+                    recent_pairs = [
+                        pair for pair in pairs 
+                        if pair.get('age_hours', 9999) < 720  # 30 days
+                    ]
+                    all_pairs.extend(recent_pairs)
+                    
                 except Exception as e:
                     logger.warning(f"Failed to get pairs for {token_address}: {str(e)}")
                     continue
             
-            return all_pairs[:limit]
+            # Sort by age and remove duplicates
+            unique_pairs = {}
+            for pair in all_pairs:
+                address = pair.get('address')
+                if address and address not in unique_pairs:
+                    unique_pairs[address] = pair
+            
+            result = list(unique_pairs.values())
+            result.sort(key=lambda x: x.get('age_hours', 9999))
+            
+            return result[:limit]
             
         except Exception as e:
             logger.error(f"Failed to fetch new pairs: {str(e)}")

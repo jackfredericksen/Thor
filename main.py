@@ -26,6 +26,7 @@ from api_clients.pumpfun import PumpFunClient
 from api_clients.bubblemaps import BubblemapsClient
 from api_clients.rugcheck import RugcheckClient
 from api_clients.moni import MoniClient
+from api_clients.token_discovery import TokenDiscoveryClient
 
 class TradingBot:
     """Main trading bot orchestrator"""
@@ -45,6 +46,7 @@ class TradingBot:
         self.bubblemaps = BubblemapsClient()
         self.rugcheck = RugcheckClient()
         self.moni = MoniClient()
+        self.token_discovery = TokenDiscoveryClient()  # New token discovery
         
         # Initialize core components
         self.smart_tracker = SmartMoneyTracker(self.gmgn, self.storage)
@@ -234,36 +236,26 @@ class TradingBot:
         all_tokens = []
         
         try:
-            # Fetch from DexScreener
-            self.logger.debug("Fetching tokens from DexScreener...")
-            dex_tokens = self.dexscreener.fetch_trending_tokens(limit=50)
-            for token in dex_tokens:
-                token['source'] = 'dexscreener'
-            all_tokens.extend(dex_tokens)
+            # Primary source: New token discovery
+            self.logger.debug("Fetching tokens from discovery service...")
+            discovery_tokens = self.token_discovery.discover_new_tokens(limit=30)
+            for token in discovery_tokens:
+                token['source'] = token.get('source', 'discovery')
+            all_tokens.extend(discovery_tokens)
             
-            # Fetch new pairs
-            new_pairs = self.dexscreener.fetch_new_pairs(limit=30)
-            for token in new_pairs:
-                token['source'] = 'dexscreener_new'
-            all_tokens.extend(new_pairs)
+        except Exception as e:
+            self.logger.error(f"Error fetching from discovery service: {str(e)}")
+        
+        try:
+            # Fallback source: DexScreener established tokens
+            self.logger.debug("Fetching fallback tokens from DexScreener...")
+            dex_tokens = self.dexscreener.fetch_trending_tokens(limit=10)
+            for token in dex_tokens:
+                token['source'] = 'dexscreener_fallback'
+            all_tokens.extend(dex_tokens)
             
         except Exception as e:
             self.logger.error(f"Error fetching from DexScreener: {str(e)}")
-        
-        try:
-            # Fetch from PumpFun
-            self.logger.debug("Fetching tokens from PumpFun...")
-            pump_tokens = self.pumpfun.fetch_new_tokens()
-            
-            # Convert PumpFun format to standard format
-            for token in pump_tokens.get('tokens', []):
-                standardized = self._standardize_pumpfun_token(token)
-                if standardized:
-                    standardized['source'] = 'pumpfun'
-                    all_tokens.append(standardized)
-                    
-        except Exception as e:
-            self.logger.error(f"Error fetching from PumpFun: {str(e)}")
         
         # Remove duplicates based on token address
         unique_tokens = {}

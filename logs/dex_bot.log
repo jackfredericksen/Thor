@@ -376,3 +376,109 @@
 2025-06-26 00:58:15,031 - risk_management - CRITICAL - risk_management.py:444 - EMERGENCY CLOSE ALL POSITIONS TRIGGERED
 2025-06-26 00:58:15,032 - trader - CRITICAL - trader.py:450 - EMERGENCY STOP COMPLETED
 2025-06-26 00:58:15,032 - root - INFO - main.py:517 - Bot shutdown after 0:08:36.531982. Processed 272 tokens, filtered 0, executed 0 trades
+2025-06-29 01:03:53,339 - root - INFO - main.py:36 - Initializing Dex Trading Bot...
+2025-06-29 01:03:53,345 - smart_money - INFO - smart_money.py:11 - Smart money tracker initialized
+2025-06-29 01:03:53,345 - trader - INFO - trader.py:31 - Trader initialized - Paper trading: True
+2025-06-29 01:03:53,346 - root - INFO - main.py:70 - Bot initialization completed
+2025-06-29 01:03:53,346 - root - INFO - main.py:80 - Starting Dex Trading Bot...
+2025-06-29 01:03:53,346 - root - INFO - main.py:134 - Authenticating with APIs...
+2025-06-29 01:03:53,346 - root - INFO - main.py:138 - Paper trading mode - skipping authentication
+2025-06-29 01:03:53,347 - root - INFO - main.py:462 - Performing health check...
+2025-06-29 01:03:53,866 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:03:53,866 - root - INFO - main.py:471 - Paper trading mode - health check passed
+2025-06-29 01:03:53,867 - root - INFO - main.py:95 - Bot started successfully, entering main loop...
+2025-06-29 01:03:53,867 - root - INFO - main.py:169 - Starting iteration 1
+2025-06-29 01:03:53,905 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:03:53,942 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:03:53,977 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:03:53,978 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:03:53,979 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:03:53,980 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:03:53,980 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:04:08,981 - root - INFO - main.py:169 - Starting iteration 2
+2025-06-29 01:04:09,018 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:04:09,057 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:04:09,093 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:04:09,094 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:04:09,095 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:04:09,095 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:04:09,095 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:04:24,096 - root - INFO - main.py:169 - Starting iteration 3
+2025-06-29 01:04:24,134 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:04:24,173 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:04:24,211 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:04:24,211 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:04:24,211 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:04:24,211 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:04:24,212 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:04:31,391 - root - INFO - main.py:74 - Received signal 2, initiating graceful shutdown...
+2025-06-29 01:04:39,212 - root - INFO - main.py:509 - Initiating graceful shutdown...
+2025-06-29 01:04:39,212 - trader - CRITICAL - trader.py:421 - EMERGENCY STOP INITIATED
+2025-06-29 01:04:39,215 - risk_management - CRITICAL - risk_management.py:444 - EMERGENCY CLOSE ALL POSITIONS TRIGGERED
+2025-06-29 01:04:39,215 - trader - CRITICAL - trader.py:450 - EMERGENCY STOP COMPLETED
+2025-06-29 01:04:39,215 - root - INFO - main.py:517 - Bot shutdown after 0:00:45.868455. Processed 27 tokens, filtered 0, executed 0 trades
+2025-06-29 01:05:38,473 - root - INFO - main.py:36 - Initializing Dex Trading Bot...
+2025-06-29 01:05:38,475 - smart_money - INFO - smart_money.py:11 - Smart money tracker initialized
+2025-06-29 01:05:38,475 - trader - INFO - trader.py:31 - Trader initialized - Paper trading: True
+2025-06-29 01:05:38,475 - root - INFO - main.py:70 - Bot initialization completed
+2025-06-29 01:05:38,475 - root - INFO - main.py:80 - Starting Dex Trading Bot...
+2025-06-29 01:05:38,476 - root - INFO - main.py:134 - Authenticating with APIs...
+2025-06-29 01:05:38,476 - root - INFO - main.py:138 - Paper trading mode - skipping authentication
+2025-06-29 01:05:38,476 - root - INFO - main.py:462 - Performing health check...
+2025-06-29 01:05:38,827 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:05:38,828 - root - INFO - main.py:471 - Paper trading mode - health check passed
+2025-06-29 01:05:38,828 - root - INFO - main.py:95 - Bot started successfully, entering main loop...
+2025-06-29 01:05:38,828 - root - INFO - main.py:169 - Starting iteration 1
+2025-06-29 01:05:38,872 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:05:38,921 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:05:38,962 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:05:38,962 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:05:38,963 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:05:38,963 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:05:38,963 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:05:53,965 - root - INFO - main.py:169 - Starting iteration 2
+2025-06-29 01:05:54,004 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:05:54,053 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:05:54,097 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:05:54,097 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:05:54,098 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:05:54,098 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:05:54,098 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:06:09,099 - root - INFO - main.py:169 - Starting iteration 3
+2025-06-29 01:06:09,143 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:09,182 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:06:09,737 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:09,737 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:06:09,737 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:06:09,738 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:06:09,738 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:06:24,739 - root - INFO - main.py:169 - Starting iteration 4
+2025-06-29 01:06:24,796 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:24,835 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:06:24,875 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:24,877 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:06:24,877 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:06:24,878 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:06:24,878 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:06:39,879 - root - INFO - main.py:169 - Starting iteration 5
+2025-06-29 01:06:39,947 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:39,989 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:06:40,054 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:40,054 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:06:40,055 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:06:40,055 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:06:40,055 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:06:55,056 - root - INFO - main.py:169 - Starting iteration 6
+2025-06-29 01:06:55,112 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:55,763 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+2025-06-29 01:06:55,802 - api_clients.dexscreener - INFO - dexscreener.py:81 - Fetched 30 pairs for token So11111111111111111111111111111111111111112
+2025-06-29 01:06:55,803 - root - INFO - main.py:276 - Fetched 9 unique tokens from 80 total
+2025-06-29 01:06:55,803 - filters - INFO - filters.py:440 - Filtered 9 tokens down to 0
+2025-06-29 01:06:55,805 - root - INFO - main.py:311 - Filter stats: 0/9 passed (0.0% pass rate)
+2025-06-29 01:06:55,805 - root - INFO - main.py:191 - No tokens passed filtering
+2025-06-29 01:07:03,131 - root - INFO - main.py:74 - Received signal 2, initiating graceful shutdown...
+2025-06-29 01:07:10,806 - root - INFO - main.py:509 - Initiating graceful shutdown...
+2025-06-29 01:07:10,806 - trader - CRITICAL - trader.py:421 - EMERGENCY STOP INITIATED
+2025-06-29 01:07:10,806 - risk_management - CRITICAL - risk_management.py:444 - EMERGENCY CLOSE ALL POSITIONS TRIGGERED
+2025-06-29 01:07:10,806 - trader - CRITICAL - trader.py:450 - EMERGENCY STOP COMPLETED
+2025-06-29 01:07:10,807 - root - INFO - main.py:517 - Bot shutdown after 0:01:32.332242. Processed 54 tokens, filtered 0, executed 0 trades

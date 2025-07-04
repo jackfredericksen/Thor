@@ -39,6 +39,11 @@ class RiskManager:
             self.max_daily_trades = 200
             self.max_concurrent_positions = 50
         
+        # Initialize tracking dictionaries
+        self.positions = {}  # Track open positions
+        self.trade_history = []  # Track all trades
+        self.daily_trades = {}  # Track daily trade counts
+        
         logger.info(f"Risk manager initialized with max position size: ${self.max_position_size}")
     
     def calculate_position_size(self, token_address: str, rating: str, 

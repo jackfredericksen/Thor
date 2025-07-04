@@ -131,7 +131,7 @@ class TradingBot:
     
     def process_tokens(self, filtered_tokens: List[Dict[str, Any]]):
         """Process filtered tokens for trading opportunities"""
-        logger.info(f"🔍 Processing {len(filtered_tokens)} filtered tokens...")
+        logger.info(f"Processing {len(filtered_tokens)} filtered tokens...")
         
         processed_count = 0
         bullish_count = 0
@@ -148,7 +148,7 @@ class TradingBot:
                 if not token_address:
                     continue
                 
-                logger.info(f"📈 Token {i+1}/{len(filtered_tokens)}: {symbol}")
+                logger.info(f"Token {i+1}/{len(filtered_tokens)}: {symbol}")
                 logger.info(f"   Address: {token_address}")
                 logger.info(f"   Source: {source}")
                 logger.info(f"   Filter Score: {score:.3f}")
@@ -185,11 +185,11 @@ class TradingBot:
                     try:
                         self.trader.execute_trade(token_address, rating)
                         self.total_trades_executed += 1
-                        logger.info(f"   ✅ Trade executed: {rating}")
+                        logger.info(f"   Trade executed: {rating}")
                     except Exception as e:
                         logger.error(f"   ❌ Trade failed: {str(e)}")
                 else:
-                    logger.info(f"   ⏸️  No trade: neutral rating")
+                    logger.info(f"   No trade: neutral rating")
                 
                 processed_count += 1
                 
@@ -199,7 +199,7 @@ class TradingBot:
             except Exception as e:
                 logger.error(f"Error processing token {token_data.get('symbol', 'unknown')}: {str(e)}")
         
-        logger.info(f"✅ Processing complete:")
+                logger.info(f"Processing complete:")
         logger.info(f"   Processed: {processed_count} tokens")
         logger.info(f"   Bullish: {bullish_count} | Bearish: {bearish_count} | Neutral: {neutral_count}")
         logger.info(f"   Trades executed: {self.total_trades_executed}")
@@ -207,7 +207,7 @@ class TradingBot:
     def monitor_smart_money(self):
         """Monitor smart money activity"""
         try:
-            logger.info("🧠 Monitoring smart money activity...")
+            logger.info("Monitoring smart money activity...")
             self.smart_tracker.monitor_smart_trades()
         except Exception as e:
             logger.error(f"Smart money monitoring failed: {str(e)}")
@@ -254,7 +254,7 @@ class TradingBot:
             cycle_time = time.time() - cycle_start
             self.cycle_count += 1
             
-            logger.info(f"🎯 Cycle {self.cycle_count} complete in {cycle_time:.1f}s")
+            logger.info(f"Cycle {self.cycle_count} complete in {cycle_time:.1f}s")
             
         except Exception as e:
             logger.error(f"Error in trading cycle: {str(e)}")

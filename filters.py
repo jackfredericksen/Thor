@@ -127,31 +127,25 @@ class TokenFilter:
         )
     
     def _check_age_and_timing(self, token_info: Dict) -> Dict:
-        """Check token age and timing factors"""
+        """Check token age and timing factors - much more lenient"""
         age_hours = float(token_info.get("age_hours", 9999))
         
-        # Age scoring - newer is generally better for memecoins
-        if age_hours < 1:  # Less than 1 hour
+        # Much more lenient age scoring for broader token coverage
+        if age_hours < 24:  # Less than 1 day
             score = 1.0
             reason = f"Very fresh: {age_hours:.1f}h old"
-        elif age_hours < 6:  # Less than 6 hours
+        elif age_hours < 168:  # Less than 1 week
             score = 0.9
             reason = f"Fresh: {age_hours:.1f}h old"
-        elif age_hours < 24:  # Less than 1 day
-            score = 0.8
-            reason = f"New: {age_hours:.1f}h old"
-        elif age_hours < 72:  # Less than 3 days
-            score = 0.6
-            reason = f"Recent: {age_hours:.1f}h old"
-        elif age_hours < 168:  # Less than 1 week
-            score = 0.4
-            reason = f"Week old: {age_hours:.1f}h old"
         elif age_hours < 720:  # Less than 1 month
-            score = 0.2
-            reason = f"Month old: {age_hours:.1f}h old"
+            score = 0.8
+            reason = f"Recent: {age_hours:.1f}h old"
+        elif age_hours < 8760:  # Less than 1 year - MUCH more lenient
+            score = 0.6
+            reason = f"Established: {age_hours:.1f}h old"
         else:
-            score = 0.0
-            reason = f"Too old: {age_hours:.1f}h old"
+            score = 0.3  # Still give old tokens a chance
+            reason = f"Old but potentially valuable: {age_hours:.1f}h old"
         
         # Bonus for discovery timing
         discovery_time = token_info.get('discovered_at')
@@ -165,59 +159,70 @@ class TokenFilter:
                 pass
         
         return {
-            'passed': age_hours < 720,  # 30 days max
+            'passed': True,  # Accept all ages now
             'reason': reason,
             'score': min(score, 1.0)
         }
     
     def _check_activity_and_momentum(self, token_info: Dict) -> Dict:
-        """Check trading activity and price momentum"""
+        """Check trading activity and price momentum - Jupiter-friendly"""
         volume = float(token_info.get("daily_volume_usd", 0))
         price_change = float(token_info.get("price_change_24h", 0))
+        source = token_info.get("discovery_source", "")
         
         score = 0.0
         signals = []
         
-        # Volume scoring
-        if volume > 1_000_000:  # $1M+ volume
-            score += 0.4
-            signals.append(f"High volume: ${volume:,.0f}")
-        elif volume > 100_000:  # $100k+ volume
-            score += 0.3
-            signals.append(f"Good volume: ${volume:,.0f}")
-        elif volume > 10_000:  # $10k+ volume
-            score += 0.2
-            signals.append(f"Moderate volume: ${volume:,.0f}")
-        elif volume > 1_000:  # $1k+ volume
-            score += 0.1
-            signals.append(f"Low volume: ${volume:,.0f}")
-        else:
-            signals.append("Very low volume")
-        
-        # Price momentum scoring
+        # Calculate abs_change for all paths
         abs_change = abs(price_change)
-        if abs_change > 100:  # 100%+ movement
-            score += 0.5
-            signals.append(f"Explosive move: {price_change:+.1f}%")
-        elif abs_change > 50:  # 50%+ movement
-            score += 0.4
-            signals.append(f"Strong move: {price_change:+.1f}%")
-        elif abs_change > 20:  # 20%+ movement
-            score += 0.3
-            signals.append(f"Good move: {price_change:+.1f}%")
-        elif abs_change > 10:  # 10%+ movement
-            score += 0.2
-            signals.append(f"Some move: {price_change:+.1f}%")
-        elif abs_change > 5:  # 5%+ movement
-            score += 0.1
-            signals.append(f"Slight move: {price_change:+.1f}%")
         
-        # Bonus for positive momentum
+        # Special handling for Jupiter tokens (no market data)
+        if "jupiter" in source:
+            score = 0.5  # Give Jupiter tokens a base score
+            signals.append("Jupiter token (comprehensive source)")
+            
+            # Bonus for interesting symbols
+            symbol = token_info.get('symbol', '').upper()
+            if any(keyword in symbol for keyword in ['MEME', 'DOG', 'CAT', 'MOON', 'PUMP']):
+                score += 0.2
+                signals.append("Interesting symbol")
+        else:
+            # Volume scoring for tokens with market data
+            if volume > 100000:  # $100k+ volume
+                score += 0.5
+                signals.append(f"High volume: ${volume:,.0f}")
+            elif volume > 10000:  # $10k+ volume
+                score += 0.3
+                signals.append(f"Good volume: ${volume:,.0f}")
+            elif volume > 1000:  # $1k+ volume
+                score += 0.2
+                signals.append(f"Moderate volume: ${volume:,.0f}")
+            elif volume > 100:  # $100+ volume
+                score += 0.1
+                signals.append(f"Low volume: ${volume:,.0f}")
+            else:
+                signals.append("Very low volume")
+            
+            # Price movement component
+            if abs_change > 50:  # 50%+ movement
+                score += 0.5
+                signals.append(f"High volatility: {price_change:+.1f}%")
+            elif abs_change > 20:  # 20%+ movement
+                score += 0.3
+                signals.append(f"Good volatility: {price_change:+.1f}%")
+            elif abs_change > 10:  # 10%+ movement
+                score += 0.2
+                signals.append(f"Some movement: {price_change:+.1f}%")
+            elif abs_change > 5:  # 5%+ movement
+                score += 0.1
+                signals.append(f"Slight movement: {price_change:+.1f}%")
+        
+        # Bonus for positive momentum (for all tokens)
         if price_change > 0:
             score *= 1.1
         
-        # Minimum activity requirement
-        has_activity = volume > 500 or abs_change > 5
+        # Much more lenient activity requirement
+        has_activity = volume > 10 or abs_change > 1 or "jupiter" in source
         
         return {
             'passed': has_activity,
@@ -280,40 +285,46 @@ class TokenFilter:
         return result
     
     def _check_size_and_valuation(self, token_info: Dict) -> Dict:
-        """Check market cap and valuation metrics"""
+        """Check market cap and valuation metrics - more lenient"""
         market_cap = float(token_info.get("market_cap", 0))
         volume = float(token_info.get("daily_volume_usd", 0))
+        source = token_info.get("discovery_source", "")
         
         if market_cap == 0:
-            # Unknown market cap - use volume to estimate
-            score = 0.5
-            reason = "Unknown market cap"
+            # Unknown market cap - give benefit of doubt, especially for Jupiter
+            if "jupiter" in source:
+                score = 0.7  # Higher score for Jupiter unknowns
+                reason = "Unknown market cap (Jupiter source)"
+            else:
+                score = 0.5
+                reason = "Unknown market cap"
             passed = True
         else:
-            # Known market cap scoring
-            if 10_000 <= market_cap <= 1_000_000:  # $10k - $1M sweet spot
+            # Much more lenient market cap ranges
+            if 1_000 <= market_cap <= 10_000_000:  # $1k - $10M sweet spot
                 score = 1.0
-                reason = f"Perfect size: ${market_cap:,.0f}"
-            elif 1_000_000 < market_cap <= 10_000_000:  # $1M - $10M
-                score = 0.8
                 reason = f"Good size: ${market_cap:,.0f}"
-            elif 10_000_000 < market_cap <= 50_000_000:  # $10M - $50M
+            elif 10_000_000 < market_cap <= 100_000_000:  # $10M - $100M
+                score = 0.8
+                reason = f"Large but acceptable: ${market_cap:,.0f}"
+            elif 100_000_000 < market_cap <= 1_000_000_000:  # $100M - $1B
                 score = 0.5
-                reason = f"Large size: ${market_cap:,.0f}"
-            elif market_cap < 10_000:  # Under $10k
-                score = 0.3
+                reason = f"Very large: ${market_cap:,.0f}"
+            elif market_cap < 1_000:  # Under $1k
+                score = 0.4
                 reason = f"Very small: ${market_cap:,.0f}"
-            else:  # Over $50M
-                score = 0.1
-                reason = f"Too large: ${market_cap:,.0f}"
+            else:  # Over $1B
+                score = 0.2  # Still give mega-caps a chance
+                reason = f"Mega cap: ${market_cap:,.0f}"
             
-            passed = market_cap < 100_000_000  # Under $100M
+            passed = market_cap < 10_000_000_000  # Under $10B (very lenient)
         
-        # Volume/Market Cap ratio check
+        # Volume/Market Cap ratio check (only for known market caps)
         if market_cap > 0 and volume > 0:
             vol_mcap_ratio = volume / market_cap
-            if vol_mcap_ratio > 1.0:  # Daily volume > market cap
-                result_warning = "Extremely high volume/mcap ratio - may be manipulated"
+            if vol_mcap_ratio > 2.0:  # Daily volume > 2x market cap
+                result_warning = "Very high volume/mcap ratio - may be manipulated"
+                score *= 0.8  # Reduce but don't eliminate
             elif vol_mcap_ratio > 0.5:
                 score *= 1.1  # Bonus for high activity
         

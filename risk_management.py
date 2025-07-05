@@ -46,11 +46,18 @@ class RiskManager:
         
         logger.info(f"Risk manager initialized with max position size: ${self.max_position_size}")
     
-    def calculate_position_size(self, token_address: str, rating: str, 
-                              token_data: Dict[str, Any] = None) -> float:
+    def calculate_position_size(self, token_address: str, rating: str,
+                                token_data: Dict[str, Any] = None) -> float:
         """Calculate appropriate position size based on risk factors"""
         try:
             base_size = self.default_position_size
+            
+            # Ensure token_data is a dict
+            if token_data is None:
+                token_data = {}
+            elif not isinstance(token_data, dict):
+                # If it's a float or other type, create empty dict
+                token_data = {}
             
             # Adjust based on rating confidence
             if rating == "bullish":
@@ -92,6 +99,27 @@ class RiskManager:
         except Exception as e:
             logger.error(f"Error calculating position size: {e}")
             return self.min_position_size
+    
+    def validate_trade(self, token_address: str, rating: str, position_size: float) -> tuple[bool, str]:
+        """Validate if trade should be executed"""
+        try:
+            # Check if we can place trade based on risk limits
+            can_trade, reason = self.can_place_trade(token_address)
+            if not can_trade:
+                return False, reason
+            
+            # Check position size limits
+            if position_size > self.max_position_size:
+                return False, f"Position size ${position_size:.2f} exceeds limit ${self.max_position_size}"
+            
+            if position_size < self.min_position_size:
+                return False, f"Position size ${position_size:.2f} below minimum ${self.min_position_size}"
+            
+            return True, "Trade validated"
+            
+        except Exception as e:
+            logger.error(f"Error validating trade: {e}")
+            return False, f"Validation error: {e}"
     
     def can_place_trade(self, token_address: str) -> tuple[bool, str]:
         """Check if we can place a trade based on risk limits"""

@@ -109,26 +109,20 @@ class GMGNClient:
         pass
 
     def fetch_smart_trades(self, min_value=1000):
-        """Fetch smart money trades with multiple endpoint attempts"""
-        endpoints_to_try = [
-            f"/sol/smartmoney/trades?min_value={min_value}",
-            f"/smartmoney/trades?min_value={min_value}",
-            f"/smart_money?min_value={min_value}",
-            f"/sol/smart_money_flow?min_value={min_value}"
-        ]
-        
-        for endpoint in endpoints_to_try:
-            try:
-                result = self._make_request(endpoint)
-                if result:
-                    print(f"GMGN: Successfully fetched smart trades from {endpoint}")
-                    return result
-            except Exception as e:
-                print(f"GMGN: Failed endpoint {endpoint}: {e}")
-                continue
-        
-        print("GMGN: All smart trade endpoints failed, returning empty")
-        return {"trades": []}
+        """Fetch smart money trades - fail fast since GMGN is blocked"""
+        try:
+            # Just try once with the current endpoint and fail fast
+            url = f"{self.current_base_url}/sol/smartmoney/trades"
+            response = self.session.get(url, params={"min_value": min_value}, timeout=3)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"trades": []}
+                
+        except Exception:
+            # Fail silently - GMGN is blocked
+            return {"trades": []}
 
     def fetch_wallet_tags(self, wallet_address):
         """Fetch wallet tags with fallback endpoints"""

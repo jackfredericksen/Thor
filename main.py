@@ -205,9 +205,8 @@ class TradingBot:
         logger.info(f"   Trades executed: {self.total_trades_executed}")
     
     def monitor_smart_money(self):
-        """Monitor smart money activity"""
+        """Monitor smart money activity using enhanced tracker"""
         try:
-            logger.info("Monitoring smart money activity...")
             self.smart_tracker.monitor_smart_trades()
         except Exception as e:
             logger.error(f"Smart money monitoring failed: {str(e)}")

@@ -165,7 +165,7 @@ class TokenFilter:
         }
     
     def _check_activity_and_momentum(self, token_info: Dict) -> Dict:
-        """Check trading activity and price momentum - Jupiter-friendly"""
+        """Check trading activity and price momentum - Jupiter-optimized"""
         volume = float(token_info.get("daily_volume_usd", 0))
         price_change = float(token_info.get("price_change_24h", 0))
         source = token_info.get("discovery_source", "")
@@ -176,18 +176,36 @@ class TokenFilter:
         # Calculate abs_change for all paths
         abs_change = abs(price_change)
         
-        # Special handling for Jupiter tokens (no market data)
+        # Enhanced handling for Jupiter tokens (comprehensive source)
         if "jupiter" in source:
-            score = 0.5  # Give Jupiter tokens a base score
-            signals.append("Jupiter token (comprehensive source)")
+            score = 0.6  # Higher base score for Jupiter tokens
+            signals.append("Jupiter comprehensive source")
             
-            # Bonus for interesting symbols
+            # Enhanced memecoin scoring
             symbol = token_info.get('symbol', '').upper()
-            if any(keyword in symbol for keyword in ['MEME', 'DOG', 'CAT', 'MOON', 'PUMP']):
+            name = token_info.get('name', '').lower()
+            memecoin_score = token_info.get('memecoin_score', 0)
+            
+            # Bonus for memecoin indicators
+            if memecoin_score > 1:
+                score += 0.3
+                signals.append("Strong memecoin signals")
+            elif memecoin_score > 0.5:
                 score += 0.2
-                signals.append("Interesting symbol")
+                signals.append("Potential memecoin")
+            
+            # Bonus for interesting patterns
+            if any(keyword in symbol for keyword in ['MEME', 'DOG', 'CAT', 'MOON', 'PUMP', 'PEPE']):
+                score += 0.2
+                signals.append("Memecoin keyword")
+            
+            # Bonus for short symbols (often memecoins)
+            if len(symbol) <= 5:
+                score += 0.1
+                signals.append("Short symbol")
+                
         else:
-            # Volume scoring for tokens with market data
+            # Volume scoring for tokens with market data (shouldn't happen with Jupiter-only)
             if volume > 100000:  # $100k+ volume
                 score += 0.5
                 signals.append(f"High volume: ${volume:,.0f}")
@@ -221,7 +239,7 @@ class TokenFilter:
         if price_change > 0:
             score *= 1.1
         
-        # Much more lenient activity requirement
+        # Jupiter-friendly activity requirement
         has_activity = volume > 10 or abs_change > 1 or "jupiter" in source
         
         return {
@@ -340,41 +358,30 @@ class TokenFilter:
         return result
     
     def _check_source_and_discovery(self, token_info: Dict) -> Dict:
-        """Check discovery source and context"""
+        """Check discovery source and context - Jupiter-optimized"""
         source = token_info.get('discovery_source', '').lower()
         
-        # Source reliability scoring
-        if 'pumpfun' in source and 'new' in source:
-            score = 1.0
-            reason = "From Pump.fun new tokens - excellent"
-        elif 'pumpfun' in source:
-            score = 0.9
-            reason = "From Pump.fun - very good"
-        elif 'dexscreener' in source and 'new' in source:
-            score = 0.8
-            reason = "From Dexscreener new - good"
-        elif 'trending' in source:
-            score = 0.7
-            reason = "From trending source - decent"
-        elif 'birdeye' in source or 'jupiter' in source:
-            score = 0.6
-            reason = "From price aggregator - okay"
-        elif 'raydium' in source:
-            score = 0.8
-            reason = "From Raydium pools - good"
+        # Jupiter is now our primary comprehensive source
+        if 'jupiter' in source:
+            score = 1.0  # Highest score for Jupiter
+            reason = "Jupiter comprehensive token list - excellent coverage"
+            
+            # Bonus for memecoin scoring
+            memecoin_score = token_info.get('memecoin_score', 0)
+            if memecoin_score > 1:
+                score = 1.0  # Keep max score
+                reason += " (strong memecoin signals)"
+            elif memecoin_score > 0.5:
+                reason += " (potential memecoin)"
         else:
-            score = 0.4
-            reason = f"Unknown source: {source}"
-        
-        # Bonus for multiple discovery sources
-        if token_info.get('seen_in_multiple_sources'):
-            score *= 1.2
-            reason += " (multiple sources)"
+            # Fallback for any other sources (shouldn't happen with Jupiter-only)
+            score = 0.8
+            reason = f"Alternative source: {source}"
         
         return {
-            'passed': True,  # All sources are acceptable
+            'passed': True,  # All sources acceptable with Jupiter-only
             'reason': reason,
-            'score': min(score, 1.0)
+            'score': score
         }
     
     def _check_risk_and_safety(self, token_info: Dict) -> Dict:

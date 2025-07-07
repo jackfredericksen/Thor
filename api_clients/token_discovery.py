@@ -30,35 +30,14 @@ class TokenDiscovery:
         })
         self.last_request_times = {}
         
-        # Working sources that we've verified
+        # Working sources - Jupiter-only for maximum reliability and coverage
         self.sources = {
-            'jupiter_tokens': TokenSource(
-                name='Jupiter Token List',
+            'jupiter_comprehensive': TokenSource(
+                name='Jupiter Comprehensive Token List',
                 url='https://token.jup.ag/all',
                 parser='jupiter_tokens',
-                max_tokens=500,  # Limit to manageable amount
+                max_tokens=1000,  # Increased from 500 for more coverage
                 rate_limit=2.0
-            ),
-            'coingecko_solana': TokenSource(
-                name='CoinGecko Solana',
-                url='https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=solana-ecosystem&order=volume_desc&per_page=100&page=1',
-                parser='coingecko_markets',
-                max_tokens=100,
-                rate_limit=2.0
-            ),
-            'dexscreener_meme': TokenSource(
-                name='DexScreener Meme',
-                url='https://api.dexscreener.com/latest/dex/search/?q=meme',
-                parser='dexscreener',
-                max_tokens=50,
-                rate_limit=1.5
-            ),
-            'dexscreener_dog': TokenSource(
-                name='DexScreener Dog',
-                url='https://api.dexscreener.com/latest/dex/search/?q=dog',
-                parser='dexscreener',
-                max_tokens=30,
-                rate_limit=1.5
             ),
         }
     
@@ -67,7 +46,7 @@ class TokenDiscovery:
         all_tokens = []
         seen_addresses = set()
         
-        logger.info(f"Starting token discovery from {len(self.sources)} working sources...")
+        logger.info(f"Starting comprehensive Jupiter token discovery (287k+ tokens)...")
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_source = {
@@ -130,33 +109,56 @@ class TokenDiscovery:
         return response
     
     def _parse_jupiter_tokens(self, data: List, max_tokens: int) -> List[Dict[str, Any]]:
-        """Parse Jupiter token list"""
+        """Parse Jupiter token list with better memecoin detection"""
         tokens = []
         
         for token in data:
             symbol = token.get('symbol', '')
+            name = token.get('name', '')
             
-            # Filter for interesting tokens (not stablecoins/major tokens)
+            # Skip obvious stablecoins/major tokens
             if (symbol and 
-                symbol.upper() not in ['USDC', 'USDT', 'SOL', 'WSOL', 'BTC', 'ETH', 'WETH', 'WBTC'] and
-                len(symbol) <= 15 and  # Reasonable symbol length
+                symbol.upper() not in ['USDC', 'USDT', 'SOL', 'WSOL', 'BTC', 'ETH', 'WETH', 'WBTC', 'DAI', 'PYUSD'] and
+                len(symbol) <= 20 and  # Reasonable symbol length
                 len(symbol) >= 2):    # Not too short
+                
+                # Prioritize potential memecoins
+                memecoin_score = 0
+                
+                # Check for memecoin keywords in symbol/name
+                memecoin_keywords = ['meme', 'dog', 'cat', 'moon', 'pump', 'pepe', 'shib', 'doge', 'inu', 'bonk']
+                text_to_check = f"{symbol} {name}".lower()
+                
+                for keyword in memecoin_keywords:
+                    if keyword in text_to_check:
+                        memecoin_score += 1
+                
+                # Check for common memecoin patterns
+                if len(symbol) <= 6:  # Short symbols often memecoins
+                    memecoin_score += 0.5
+                    
+                if any(char in symbol.upper() for char in ['X', 'Z', 'Q']):  # Edgy letters
+                    memecoin_score += 0.3
                 
                 tokens.append({
                     'address': token.get('address'),
                     'symbol': symbol,
-                    'name': token.get('name', symbol),
+                    'name': name,
                     'daily_volume_usd': 0,  # Jupiter doesn't provide this
                     'price_change_24h': 0,  # Jupiter doesn't provide this
                     'liquidity_usd': 0,
                     'market_cap': 0,
                     'price_usd': 0,
-                    'age_hours': 48,  # Default assumption
+                    'age_hours': 48,  # Default assumption for Jupiter tokens
+                    'memecoin_score': memecoin_score,  # Our custom scoring
                     'source_raw': 'jupiter'
                 })
                 
                 if len(tokens) >= max_tokens:
                     break
+        
+        # Sort by memecoin score (highest first) to prioritize memecoins
+        tokens.sort(key=lambda x: x.get('memecoin_score', 0), reverse=True)
         
         return tokens
     

@@ -100,14 +100,6 @@ class GMGNClient:
             print(f"Error checking order status: {e}")
             return {"status": "error"}
 
-    def authenticate_telegram(self, telegram_token):
-        # Implement authentication flow if needed
-        pass
-
-    def authenticate_wallet(self, wallet_address):
-        # Implement wallet login flow if needed
-        pass
-
     def fetch_smart_trades(self, min_value=1000):
         """Fetch smart money trades - fail fast since GMGN is blocked"""
         try:

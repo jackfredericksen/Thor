@@ -5,9 +5,6 @@ from typing import Any, Dict, List
 
 # API Keys - Most sources are public APIs that don't need keys!
 API_KEYS = {
-    # Required for trading execution
-    "telegram_token": os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN"),
-    "wallet_address": os.getenv("WALLET_ADDRESS", "YOUR_WALLET_ADDRESS"),
     # Optional - for enhanced features (many have free tiers)
     "birdeye": os.getenv("BIRDEYE_API_KEY", ""),  # Optional, has free tier
     "coingecko": os.getenv("COINGECKO_API_KEY", ""),  # Optional, often free
@@ -88,14 +85,19 @@ class FilterConfig:
 class TradingConfig:
     """Trading execution parameters"""
 
+    # Wallet configuration for LIVE TRADING
+    WALLET_PRIVATE_KEY = os.getenv("THOR_WALLET_PRIVATE_KEY", "")
+    WALLET_ADDRESS = os.getenv("THOR_WALLET_ADDRESS", "")
+    RPC_ENDPOINT = os.getenv("SOLANA_RPC_ENDPOINT", "https://api.mainnet-beta.solana.com")
+
     # Position sizing
-    MAX_POSITION_SIZE_USD = 1000  # Maximum position size
+    MAX_POSITION_SIZE_USD = float(os.getenv("THOR_MAX_POSITION_SIZE", "1000"))
     DEFAULT_POSITION_SIZE_USD = 100  # Default position size
     MIN_POSITION_SIZE_USD = 10  # Minimum position size
 
     # Risk management
     MAX_SLIPPAGE = 0.05  # 5% maximum slippage
-    DEFAULT_SLIPPAGE = 0.02  # 2% default slippage
+    DEFAULT_SLIPPAGE = float(os.getenv("THOR_DEFAULT_SLIPPAGE", "0.02"))
     STOP_LOSS_PERCENT = 0.15  # 15% stop loss
     TAKE_PROFIT_PERCENT = 0.50  # 50% take profit
 
@@ -244,11 +246,7 @@ class Config:
         """Validate configuration and return any issues"""
         issues = []
 
-        # Check required API keys - only telegram and wallet are actually required
-        required_keys = ["telegram_token", "wallet_address"]
-        for key in required_keys:
-            if not self.API_KEYS.get(key) or "YOUR_" in str(self.API_KEYS[key]):
-                issues.append(f"Missing or invalid required key: {key}")
+        # No required API keys for token discovery (all public APIs)
 
         # Check database path is writable
         try:

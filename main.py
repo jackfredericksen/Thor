@@ -1,4 +1,4 @@
-# main.py - Updated with comprehensive Solana memecoin discovery
+# main.py - Thor with Terminal UI
 
 import time
 import json
@@ -6,8 +6,9 @@ import pandas as pd
 import logging
 from datetime import datetime
 from typing import List, Dict, Any
+from rich.live import Live
 
-# Your existing imports
+# Core imports
 from config import DB_PATH, FETCH_INTERVAL, API_KEYS
 from storage import Storage
 from filters import filter_tokens_batch, get_filter_stats
@@ -16,6 +17,11 @@ from trader import Trader
 from smart_money import SmartMoneyTracker
 from api_clients.token_discovery import TokenDiscovery
 from api_clients.gmgn import GMGNClient
+
+# UI imports
+from ui.dashboard import Dashboard
+from ui.keyboard import KeyboardHandler
+from ui.log_handler import DashboardLogHandler
 
 # Setup logging
 logging.basicConfig(
@@ -37,27 +43,22 @@ class TradingBot:
         self.gmgn = GMGNClient()
         self.smart_tracker = SmartMoneyTracker(self.gmgn, self.storage)
         self.technicals = Technicals()
-        self.trader = Trader(self.gmgn, self.storage)
-        self.token_discovery = TokenDiscovery(config=None)  # Pass your config here
-        
+        self.trader = Trader(self.storage)  # Live trading with Solana
+        self.token_discovery = TokenDiscovery(config=None)
+
         # Performance tracking
         self.cycle_count = 0
         self.total_tokens_discovered = 0
         self.total_tokens_filtered = 0
         self.total_trades_executed = 0
-        
+        self.start_time = time.time()
+
+        # UI data tracking
+        self.latest_filtered_tokens = []
+        self.trade_history = []
+
         logger.info("Trading bot initialized successfully")
-    
-    def authenticate(self):
-        """Authenticate with all services"""
-        try:
-            self.gmgn.authenticate_telegram(API_KEYS["telegram_token"])
-            self.gmgn.authenticate_wallet(API_KEYS["wallet_address"])
-            logger.info("Authentication completed")
-        except Exception as e:
-            logger.error(f"Authentication failed: {str(e)}")
-            raise
-    
+
     def discover_and_filter_tokens(self) -> List[Dict[str, Any]]:
         """Comprehensive token discovery and filtering"""
         logger.info("=" * 60)
@@ -92,7 +93,10 @@ class TradingBot:
             logger.info(f"   Average Age: {stats['age_stats']['average_hours']:.1f} hours")
             logger.info(f"   Total Volume: ${stats['volume_stats']['total_volume']:,.0f}")
             logger.info(f"   Sources: {stats['source_breakdown']}")
-        
+
+        # Store for dashboard
+        self.latest_filtered_tokens = filtered_tokens
+
         return filtered_tokens
     
     def analyze_token_technicals(self, token_data: Dict[str, Any]) -> str:
@@ -185,6 +189,19 @@ class TradingBot:
                     try:
                         self.trader.execute_trade(token_address, rating)
                         self.total_trades_executed += 1
+
+                        # Record trade for dashboard
+                        trade_record = {
+                            'timestamp': datetime.now(),
+                            'action': rating,
+                            'symbol': symbol,
+                            'address': token_address,
+                            'quantity': 1000,  # Placeholder
+                            'price': token_data.get('price', 0),
+                            'confidence': score
+                        }
+                        self.trade_history.append(trade_record)
+
                         logger.info(f"   Trade executed: {rating}")
                     except Exception as e:
                         logger.error(f"   ❌ Trade failed: {str(e)}")
@@ -230,7 +247,26 @@ class TradingBot:
             logger.info(f"Filter success rate: {filter_rate:.1f}%")
         
         logger.info("=" * 60)
-    
+
+    def get_dashboard_stats(self) -> Dict:
+        """Get all stats for dashboard display"""
+        return {
+            'status': 'running',
+            'cycle_count': self.cycle_count,
+            'total_discovered': self.total_tokens_discovered,
+            'total_filtered': self.total_tokens_filtered,
+            'total_trades': self.total_trades_executed,
+            'uptime': time.time() - self.start_time,
+        }
+
+    def get_latest_tokens(self, limit: int = 10) -> List[Dict]:
+        """Get most recent filtered tokens for display"""
+        return self.latest_filtered_tokens[:limit]
+
+    def get_recent_trades(self, limit: int = 20) -> List[Dict]:
+        """Get recent trade history"""
+        return self.trade_history[-limit:]
+
     def run_single_cycle(self):
         """Run one complete discovery and trading cycle"""
         cycle_start = time.time()
@@ -260,27 +296,50 @@ class TradingBot:
             raise
     
     def run(self):
-        """Main bot loop"""
-        logger.info("Starting Solana Memecoin Trading Bot")
+        """Main bot loop with terminal UI"""
+        logger.info("Starting Thor Memecoin Sniping Bot with Terminal UI")
         logger.info(f"   Fetch interval: {FETCH_INTERVAL} seconds")
         logger.info(f"   Database: {DB_PATH}")
-        
-        # Authenticate
-        self.authenticate()
-        
+        logger.info(f"   Mode: LIVE TRADING")
+
+        # Create dashboard and keyboard handler
+        dashboard = Dashboard(self)
+        keyboard_handler = KeyboardHandler()
+
+        # Setup logging to dashboard
+        dashboard_log_handler = DashboardLogHandler(dashboard.log_buffer)
+        dashboard_log_handler.setLevel(logging.INFO)
+        logging.getLogger().addHandler(dashboard_log_handler)
+
+        # Create layout
+        layout = dashboard.create_layout()
+
+        # Keyboard callback
+        def on_key(key):
+            return keyboard_handler.handle_key(key, self, dashboard)
+
+        keyboard_handler.on_key_press = on_key
+        keyboard_handler.start()
+
         try:
-            while True:
-                # Run trading cycle
-                self.run_single_cycle()
-                
-                # Print stats every 10 cycles
-                if self.cycle_count % 10 == 0:
-                    self.print_session_stats()
-                
-                # Sleep until next cycle
-                logger.info("Sleeping for 15 seconds until next cycle...")
-                time.sleep(FETCH_INTERVAL)
-                
+            with Live(layout, refresh_per_second=4, screen=True) as live:
+                while dashboard.running:
+                    if not keyboard_handler.paused:
+                        # Run trading cycle
+                        self.run_single_cycle()
+
+                        # Update dashboard
+                        dashboard.update_layout(layout)
+                        live.update(layout)
+
+                        # Sleep until next cycle
+                        time.sleep(FETCH_INTERVAL)
+                    else:
+                        # Paused - just update display
+                        dashboard.update_layout(layout)
+                        live.update(layout)
+                        time.sleep(0.5)
+
         except KeyboardInterrupt:
             logger.info("\n🛑 Bot stopped by user")
             self.print_session_stats()
@@ -288,6 +347,8 @@ class TradingBot:
             logger.error(f"💥 Bot crashed: {str(e)}")
             self.print_session_stats()
             raise
+        finally:
+            keyboard_handler.stop()
 
 def main():
     """Entry point"""

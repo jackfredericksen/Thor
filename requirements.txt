@@ -49,3 +49,13 @@ tenacity>=8.2.0
 
 # Mathematical calculations
 ta-lib>=0.4.25  # Technical analysis library (optional)
+
+# Terminal UI
+rich>=13.0.0
+pynput>=1.7.6  # Keyboard input handling
+
+# Solana & Trading
+solana>=0.30.0
+solders>=0.18.0
+anchorpy>=0.18.0
+jupiter-python-sdk>=1.0.0  # Jupiter aggregator for swaps

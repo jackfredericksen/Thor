@@ -128,3 +128,25 @@ class BaseAPIClient:
         except Exception as e:
             logger.warning(f"{self.service_name} health check failed: {str(e)}")
             return False
+
+    def close(self):
+        """Close the session and cleanup resources"""
+        if hasattr(self, 'session') and self.session:
+            self.session.close()
+            self.session = None
+
+    def __del__(self):
+        """Cleanup on destruction"""
+        try:
+            self.close()
+        except:
+            pass  # Ignore errors during cleanup
+
+    def __enter__(self):
+        """Support context manager usage"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup on context manager exit"""
+        self.close()
+        return False

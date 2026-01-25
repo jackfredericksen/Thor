@@ -2,7 +2,6 @@
 
 import time
 import json
-import pandas as pd
 import logging
 from datetime import datetime
 from typing import List, Dict, Any
@@ -15,7 +14,7 @@ from filters import filter_tokens_batch, get_filter_stats
 from technicals import Technicals
 from trader import Trader
 from smart_money import SmartMoneyTracker
-from api_clients.token_discovery import TokenDiscovery
+from api_clients.token_discovery import EnhancedTokenDiscovery as TokenDiscovery
 from api_clients.gmgn import GMGNClient
 
 # UI imports
@@ -104,7 +103,7 @@ class TradingBot:
         try:
             # Use price history if available
             if 'price_history' in token_data and token_data['price_history']:
-                prices = pd.Series(token_data['price_history'])
+                prices = token_data['price_history']  # Already a list
                 if len(prices) >= 14:  # Need enough data for RSI
                     rsi = self.technicals.compute_rsi(prices)
                     slope = self.technicals.compute_ema_slope(prices)
@@ -187,26 +186,37 @@ class TradingBot:
                 # Execute trading decision
                 if rating in ["bullish", "bearish"]:
                     try:
-                        self.trader.execute_trade(token_address, rating)
-                        self.total_trades_executed += 1
+                        # ✅ CRITICAL: Check if trade actually succeeded
+                        trade_success = self.trader.execute_trade(
+                            token_address,
+                            rating,
+                            token_info=token_data,
+                            confidence_score=score
+                        )
 
-                        # Record trade for dashboard
-                        trade_record = {
-                            'timestamp': datetime.now(),
-                            'action': rating,
-                            'symbol': symbol,
-                            'address': token_address,
-                            'quantity': 1000,  # Placeholder
-                            'price': token_data.get('price', 0),
-                            'confidence': score
-                        }
-                        self.trade_history.append(trade_record)
+                        if trade_success:
+                            self.total_trades_executed += 1
 
-                        logger.info(f"   Trade executed: {rating}")
+                            # Record trade for dashboard
+                            trade_record = {
+                                'timestamp': datetime.now(),
+                                'action': rating,
+                                'symbol': symbol,
+                                'address': token_address,
+                                'quantity': 1000,  # Placeholder
+                                'price': token_data.get('price_usd', 0),
+                                'confidence': score
+                            }
+                            self.trade_history.append(trade_record)
+
+                            logger.info(f"   ✅ Trade SUCCESSFULLY executed: {rating}")
+                        else:
+                            logger.info(f"   ❌ Trade NOT executed (failed validation)")
+
                     except Exception as e:
-                        logger.error(f"   ❌ Trade failed: {str(e)}")
+                        logger.error(f"   ❌ Trade failed with exception: {str(e)}")
                 else:
-                    logger.info(f"   No trade: neutral rating")
+                    logger.debug(f"   No trade: neutral rating")
                 
                 processed_count += 1
                 

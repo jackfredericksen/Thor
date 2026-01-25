@@ -4,18 +4,27 @@ import requests
 import time
 import logging
 from typing import Dict, List, Optional
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 class VolumeVerifier:
     """Verify real-time volume data for tokens before trading"""
-    
+
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
+        self.cache = {}  # Cache volume data to avoid repeated calls
+
+    @contextmanager
+    def _get_session(self):
+        """Context manager for session - ensures cleanup"""
+        session = requests.Session()
+        session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
-        self.cache = {}  # Cache volume data to avoid repeated calls
+        try:
+            yield session
+        finally:
+            session.close()
     
     def get_token_volume(self, token_address: str) -> Dict:
         """Get real-time volume data for a token"""
@@ -43,59 +52,61 @@ class VolumeVerifier:
     def _get_dexscreener_volume(self, token_address: str) -> Optional[Dict]:
         """Get volume from DexScreener (most reliable)"""
         try:
-            url = f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
-            response = self.session.get(url, timeout=10)
+            with self._get_session() as session:
+                url = f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
+                response = session.get(url, timeout=10)
             
-            if response.status_code == 200:
-                data = response.json()
-                pairs = data.get('pairs', [])
-                
-                if pairs:
-                    # Use the pair with highest volume
-                    best_pair = max(pairs, key=lambda p: float(p.get('volume', {}).get('h24', 0)))
-                    
-                    volume_24h = float(best_pair.get('volume', {}).get('h24', 0))
-                    liquidity = float(best_pair.get('liquidity', {}).get('usd', 0))
-                    price_change = float(best_pair.get('priceChange', {}).get('h24', 0))
-                    price = float(best_pair.get('priceUsd', 0))
-                    
-                    return {
-                        'volume_24h': volume_24h,
-                        'liquidity_usd': liquidity,
-                        'price_change_24h': price_change,
-                        'price_usd': price,
-                        'source': 'dexscreener',
-                        'pairs_count': len(pairs),
-                        'has_trading': volume_24h > 0
-                    }
+                if response.status_code == 200:
+                    data = response.json()
+                    pairs = data.get('pairs', [])
+
+                    if pairs:
+                        # Use the pair with highest volume
+                        best_pair = max(pairs, key=lambda p: float(p.get('volume', {}).get('h24', 0)))
+
+                        volume_24h = float(best_pair.get('volume', {}).get('h24', 0))
+                        liquidity = float(best_pair.get('liquidity', {}).get('usd', 0))
+                        price_change = float(best_pair.get('priceChange', {}).get('h24', 0))
+                        price = float(best_pair.get('priceUsd', 0))
+
+                        return {
+                            'volume_24h': volume_24h,
+                            'liquidity_usd': liquidity,
+                            'price_change_24h': price_change,
+                            'price_usd': price,
+                            'source': 'dexscreener',
+                            'pairs_count': len(pairs),
+                            'has_trading': volume_24h > 0
+                        }
         except Exception as e:
             logger.debug(f"DexScreener volume check failed for {token_address}: {e}")
-        
+
         return None
     
     def _get_birdeye_volume(self, token_address: str) -> Optional[Dict]:
         """Get volume from Birdeye (backup)"""
         try:
-            # Birdeye public endpoint (if available)
-            url = f"https://public-api.birdeye.so/public/price/{token_address}"
-            response = self.session.get(url, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                volume_24h = float(data.get('volume24h', 0))
-                
-                return {
-                    'volume_24h': volume_24h,
-                    'liquidity_usd': 0,  # Not available
-                    'price_change_24h': float(data.get('priceChange24h', 0)),
-                    'price_usd': float(data.get('value', 0)),
-                    'source': 'birdeye',
-                    'pairs_count': 1,
-                    'has_trading': volume_24h > 0
-                }
+            with self._get_session() as session:
+                # Birdeye public endpoint (if available)
+                url = f"https://public-api.birdeye.so/public/price/{token_address}"
+                response = session.get(url, timeout=5)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    volume_24h = float(data.get('volume24h', 0))
+
+                    return {
+                        'volume_24h': volume_24h,
+                        'liquidity_usd': 0,  # Not available
+                        'price_change_24h': float(data.get('priceChange24h', 0)),
+                        'price_usd': float(data.get('value', 0)),
+                        'source': 'birdeye',
+                        'pairs_count': 1,
+                        'has_trading': volume_24h > 0
+                    }
         except Exception as e:
             logger.debug(f"Birdeye volume check failed for {token_address}: {e}")
-        
+
         return None
     
     def _get_fallback_volume(self, token_address: str) -> Dict:

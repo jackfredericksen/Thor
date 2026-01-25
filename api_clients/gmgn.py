@@ -9,14 +9,14 @@ class GMGNClient:
         # Try multiple potential GMGN endpoints
         self.base_urls = [
             "https://gmgn.ai/api/v1",
-            "https://api.gmgn.ai/v1", 
+            "https://api.gmgn.ai/v1",
             "https://gmgn.ai/api",
             API_URLS.get("gmgn", "https://api.gmgn.io/v1")
         ]
         self.current_base_url = None
         self.api_key = API_KEYS.get("gmgn", "")
         self.session = requests.Session()
-        
+
         # Set user agent for public API access
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -24,13 +24,35 @@ class GMGNClient:
             "Origin": "https://gmgn.ai",
             "Referer": "https://gmgn.ai/"
         })
-        
+
         # Only add auth header if API key is provided and not empty
         if self.api_key and self.api_key.strip():
             self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
-        
+
         # Test connection and find working endpoint
         self._find_working_endpoint()
+
+    def close(self):
+        """Close the session and cleanup resources"""
+        if hasattr(self, 'session') and self.session:
+            self.session.close()
+            self.session = None
+
+    def __del__(self):
+        """Cleanup on destruction"""
+        try:
+            self.close()
+        except:
+            pass  # Ignore errors during cleanup
+
+    def __enter__(self):
+        """Support context manager usage"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup on context manager exit"""
+        self.close()
+        return False
 
     def _find_working_endpoint(self):
         """Test different endpoints to find one that works"""

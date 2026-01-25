@@ -1,8 +1,8 @@
 #!/bin/bash
-# Thor Memecoin Sniping Bot - Quick Start Script
+# Thor Memecoin Sniping Bot - Web GUI Mode Launcher
 
-echo "🔨 Thor Memecoin Sniping Bot"
-echo "================================"
+echo "🌐 Thor Memecoin Sniping Bot - Web GUI"
+echo "========================================"
 echo ""
 
 # Check if virtual environment exists
@@ -15,9 +15,17 @@ fi
 echo "🔧 Activating virtual environment..."
 source venv/bin/activate
 
-# Check if dependencies are installed
+# Check if Flask is installed
+if ! python3 -c "import flask" 2>/dev/null; then
+    echo "📥 Installing Flask and dependencies..."
+    pip install flask>=2.3.0
+else
+    echo "✅ Flask already installed"
+fi
+
+# Check if other dependencies are installed
 if ! python3 -c "import rich" 2>/dev/null; then
-    echo "📥 Installing dependencies..."
+    echo "📥 Installing all dependencies..."
     pip install -r requirements.txt
 else
     echo "✅ Dependencies already installed"
@@ -33,10 +41,6 @@ if [ ! -f ".env" ]; then
     echo "🔴 CRITICAL: You must edit .env with your wallet credentials!"
     echo "   nano .env"
     echo ""
-    echo "Required fields:"
-    echo "  - THOR_WALLET_PRIVATE_KEY"
-    echo "  - THOR_WALLET_ADDRESS"
-    echo ""
     read -p "Press Enter after editing .env, or Ctrl+C to exit..."
 fi
 
@@ -50,12 +54,14 @@ echo ""
 echo "Safety reminders:"
 echo "  ✅ Start with minimal funds (e.g., 0.1 SOL)"
 echo "  ✅ Set THOR_MAX_POSITION_SIZE=10 in .env"
-echo "  ✅ Test emergency stop (s key) immediately"
-echo "  ✅ Monitor first 10 cycles closely"
+echo "  ✅ Test thoroughly before using large amounts"
 echo ""
-echo "🚀 Launching Thor in 2 seconds..."
+echo "🌐 Starting Web GUI..."
+echo "   Open your browser to: http://localhost:5001"
+echo ""
+echo "Press Ctrl+C in this terminal to stop the server"
 echo ""
 sleep 2
 
-# Use venv python to ensure all packages are available
-./venv/bin/python3 main.py
+# Launch Web GUI
+./venv/bin/python3 web_gui.py

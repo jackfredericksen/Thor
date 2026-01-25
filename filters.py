@@ -1,6 +1,7 @@
 # filters.py - Enhanced Memecoin Filtering System
 
 import logging
+import asyncio
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -57,8 +58,8 @@ def passes_filters(token_info: Dict[str, Any]) -> bool:
 
 class TokenFilter:
     """Advanced filtering system for comprehensive token analysis"""
-    
-    def __init__(self):
+
+    def __init__(self, token_analyzer=None):
         # Comprehensive filter categories
         self.filters = {
             'age_and_timing': self._check_age_and_timing,
@@ -68,16 +69,19 @@ class TokenFilter:
             'source_and_discovery': self._check_source_and_discovery,
             'risk_and_safety': self._check_risk_and_safety,
         }
-        
+
         # Adjusted weights for memecoin trading
         self.filter_weights = {
-            'age_and_timing': 0.25,           # When was it created/discovered
-            'activity_and_momentum': 0.30,    # Volume, price action, buzz
+            'age_and_timing': 0.20,           # When was it created/discovered
+            'activity_and_momentum': 0.25,    # Volume, price action, buzz
             'liquidity_and_tradability': 0.15, # Can we actually trade it
             'size_and_valuation': 0.10,       # Market cap considerations
-            'source_and_discovery': 0.15,     # Where did we find it
-            'risk_and_safety': 0.05,          # Basic safety checks
+            'source_and_discovery': 0.10,     # Where did we find it
+            'risk_and_safety': 0.20,          # Contract analysis & safety (INCREASED)
         }
+
+        # Token analyzer for contract checks
+        self.token_analyzer = token_analyzer
     
     def filter_token(self, token_info: Dict[str, Any], 
                     strict_mode: bool = False) -> FilterResult:
@@ -385,14 +389,39 @@ class TokenFilter:
         }
     
     def _check_risk_and_safety(self, token_info: Dict) -> Dict:
-        """Basic safety and risk checks"""
+        """Enhanced safety checks with contract analysis"""
         volume = float(token_info.get("daily_volume_usd", 0))
         market_cap = float(token_info.get("market_cap", 0))
         age_hours = float(token_info.get("age_hours", 9999))
-        
+
         risk_flags = []
         score = 1.0  # Start with perfect score, deduct for risks
-        
+
+        # Contract analysis (if analyzer available)
+        if self.token_analyzer:
+            token_address = token_info.get("address")
+            if token_address:
+                try:
+                    # Run contract analysis
+                    analysis = asyncio.run(self.token_analyzer.analyze_token(token_address))
+
+                    # Apply contract safety score
+                    contract_safety = analysis.get('safety_score', 50) / 100.0
+                    score = (score + contract_safety) / 2  # Average with existing score
+
+                    # Add flags from contract analysis
+                    if analysis.get('has_mint_authority'):
+                        risk_flags.append("Mint authority exists")
+                    if analysis.get('has_freeze_authority'):
+                        risk_flags.append("Freeze authority exists")
+
+                    for flag in analysis.get('flags', []):
+                        if flag not in ['mint_authority_exists', 'freeze_authority_exists']:
+                            risk_flags.append(flag.replace('_', ' ').title())
+
+                except Exception as e:
+                    logger.debug(f"Contract analysis failed for {token_address[:8]}: {e}")
+
         # Volume/Market Cap manipulation check
         if market_cap > 0 and volume > 0:
             vol_mcap_ratio = volume / market_cap
@@ -402,34 +431,34 @@ class TokenFilter:
             elif vol_mcap_ratio > 1.0:
                 risk_flags.append("High vol/mcap ratio")
                 score -= 0.1
-        
+
         # Age vs activity mismatch
         if age_hours < 1 and volume > 1_000_000:
             risk_flags.append("Suspicious volume for age")
             score -= 0.2
-        
+
         # Token name/symbol checks
         symbol = token_info.get('symbol', '').upper()
         name = token_info.get('name', '').lower()
-        
+
         # Avoid obvious scam patterns
         scam_patterns = ['SCAM', 'TEST', 'FAKE', 'RUGPULL', 'PONZI']
         if any(pattern in symbol for pattern in scam_patterns):
             risk_flags.append("Suspicious symbol")
             score -= 0.5
-        
+
         if any(pattern in name for pattern in scam_patterns):
             risk_flags.append("Suspicious name")
             score -= 0.5
-        
+
         # Very low scores indicate high risk
         passed = score > 0.3
-        
+
         if risk_flags:
             reason = f"Risk flags: {'; '.join(risk_flags)}"
         else:
             reason = "No major risk flags detected"
-        
+
         return {
             'passed': passed,
             'reason': reason,

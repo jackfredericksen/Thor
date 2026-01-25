@@ -1,6 +1,6 @@
 """
 Solana Trading Client with Jupiter Aggregator Integration
-Executes real token swaps on Solana blockchain
+Executes real token swaps on Solana blockchain with Jito MEV bundles
 """
 
 import logging
@@ -15,6 +15,9 @@ from solders.signature import Signature
 import base58
 import asyncio
 
+from .jito_client import JitoClient, JitoConfig
+from config import TradingConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +29,7 @@ class SolanaTrader:
         Initialize Solana trader
 
         Args:
-            private_key: Base58 encoded private key
+            private_key: Base58 encoded private key OR array format like [1,2,3,...]
             rpc_url: Solana RPC endpoint URL
         """
         self.rpc_url = rpc_url
@@ -34,12 +37,24 @@ class SolanaTrader:
 
         # Initialize wallet from private key
         try:
-            private_key_bytes = base58.b58decode(private_key)
+            # Handle array format: [1,2,3,...] or "[1,2,3,...]"
+            if private_key.startswith('['):
+                # Parse array format
+                import json
+                key_array = json.loads(private_key)
+                private_key_bytes = bytes(key_array)
+                logger.info("Parsed private key from array format")
+            else:
+                # Base58 format
+                private_key_bytes = base58.b58decode(private_key)
+                logger.info("Parsed private key from base58 format")
+
             self.wallet = Keypair.from_bytes(private_key_bytes)
             self.wallet_address = str(self.wallet.pubkey())
             logger.info(f"Solana wallet initialized: {self.wallet_address}")
         except Exception as e:
             logger.error(f"Failed to initialize wallet: {e}")
+            logger.error(f"Private key format: {private_key[:20]}...")
             raise
 
         # Jupiter API endpoint
@@ -47,6 +62,12 @@ class SolanaTrader:
 
         # Native SOL mint address
         self.SOL_MINT = "So11111111111111111111111111111111111111112"
+
+        # Jito client for MEV bundles (faster execution)
+        self.jito_client = JitoClient() if TradingConfig.USE_JITO else None
+        if self.jito_client:
+            tip_sol = JitoConfig.get_tip_for_priority(TradingConfig.JITO_PRIORITY)
+            logger.info(f"Jito MEV enabled - Priority: {TradingConfig.JITO_PRIORITY} ({tip_sol} SOL tip)")
 
     async def get_sol_balance(self) -> float:
         """Get SOL balance of wallet"""
@@ -172,23 +193,41 @@ class SolanaTrader:
                 # Sign transaction
                 versioned_tx.sign([self.wallet])
 
-                # Send transaction
-                tx_signature = await self.client.send_transaction(
-                    versioned_tx,
-                    opts={'skip_preflight': False, 'preflight_commitment': Confirmed}
-                )
+                # Send transaction - use Jito if enabled
+                if self.jito_client and TradingConfig.USE_JITO:
+                    # Send via Jito MEV bundle for faster execution
+                    tip_sol = JitoConfig.get_tip_for_priority(TradingConfig.JITO_PRIORITY)
+                    logger.info(f"Sending transaction via Jito bundle (tip: {tip_sol} SOL)")
 
-                if tx_signature.value:
-                    signature_str = str(tx_signature.value)
-                    logger.info(f"Transaction sent: {signature_str}")
+                    signature_str = await self.jito_client.send_transaction_with_jito(
+                        versioned_tx,
+                        tip_lamports=int(tip_sol * 1_000_000_000)
+                    )
 
-                    # Wait for confirmation
-                    await self._wait_for_confirmation(signature_str)
-
-                    return signature_str
+                    if signature_str:
+                        logger.info(f"Jito transaction confirmed: {signature_str}")
+                        return signature_str
+                    else:
+                        logger.error("Jito transaction failed - falling back to regular RPC")
+                        # Fall through to regular send below
                 else:
-                    logger.error("Transaction failed to send")
-                    return None
+                    # Regular RPC send
+                    tx_signature = await self.client.send_transaction(
+                        versioned_tx,
+                        opts={'skip_preflight': False, 'preflight_commitment': Confirmed}
+                    )
+
+                    if tx_signature.value:
+                        signature_str = str(tx_signature.value)
+                        logger.info(f"Transaction sent: {signature_str}")
+
+                        # Wait for confirmation
+                        await self._wait_for_confirmation(signature_str)
+
+                        return signature_str
+                    else:
+                        logger.error("Transaction failed to send")
+                        return None
 
         except Exception as e:
             logger.error(f"Error executing Jupiter swap: {e}")

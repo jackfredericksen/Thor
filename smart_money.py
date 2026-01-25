@@ -10,13 +10,35 @@ logger = logging.getLogger(__name__)
 
 class AlternativeSmartMoneyTracker:
     """Smart money tracking using alternative sources"""
-    
+
     def __init__(self, storage):
         self.storage = storage
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+
+    def close(self):
+        """Close the session and cleanup resources"""
+        if hasattr(self, 'session') and self.session:
+            self.session.close()
+            self.session = None
+
+    def __del__(self):
+        """Cleanup on destruction"""
+        try:
+            self.close()
+        except:
+            pass  # Ignore errors during cleanup
+
+    def __enter__(self):
+        """Support context manager usage"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup on context manager exit"""
+        self.close()
+        return False
     
     def monitor_smart_trades(self):
         """Monitor smart money from multiple alternative sources"""

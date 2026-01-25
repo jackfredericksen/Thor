@@ -2,6 +2,10 @@
 
 import os
 from typing import Any, Dict, List
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # API Keys - Most sources are public APIs that don't need keys!
 API_KEYS = {
@@ -50,22 +54,22 @@ class FilterConfig:
     OPTIMAL_AGE_HOURS = 72  # 3 days is optimal for memecoins
     FRESH_AGE_HOURS = 6  # Very fresh tokens (highest priority)
 
-    # Volume filters (USD)
-    MIN_VOLUME_USD = 500  # Minimum daily volume
-    GOOD_VOLUME_USD = 10_000  # Good volume threshold
-    HIGH_VOLUME_USD = 100_000  # High volume threshold
+    # Volume filters (USD) - MUCH MORE SELECTIVE
+    MIN_VOLUME_USD = 50_000  # Minimum $50k daily volume (was 500)
+    GOOD_VOLUME_USD = 100_000  # Good volume threshold (was 10k)
+    HIGH_VOLUME_USD = 500_000  # High volume threshold (was 100k)
     MAX_VOLUME_USD = 50_000_000  # Avoid overly hyped tokens
 
-    # Market cap filters (USD)
-    MIN_MARKET_CAP = 5_000  # Minimum viable market cap
-    OPTIMAL_MIN_MARKET_CAP = 50_000  # Optimal minimum
+    # Market cap filters (USD) - MORE SELECTIVE
+    MIN_MARKET_CAP = 50_000  # Minimum viable market cap (was 5k)
+    OPTIMAL_MIN_MARKET_CAP = 100_000  # Optimal minimum (was 50k)
     OPTIMAL_MAX_MARKET_CAP = 10_000_000  # Optimal maximum
     MAX_MARKET_CAP = 100_000_000  # Maximum before too mainstream
 
-    # Liquidity filters (USD)
-    MIN_LIQUIDITY_USD = 2_000  # Absolute minimum for trading
-    GOOD_LIQUIDITY_USD = 20_000  # Good liquidity threshold
-    EXCELLENT_LIQUIDITY_USD = 100_000  # Excellent liquidity
+    # Liquidity filters (USD) - MUCH MORE SELECTIVE
+    MIN_LIQUIDITY_USD = 20_000  # Absolute minimum for trading (was 2k)
+    GOOD_LIQUIDITY_USD = 50_000  # Good liquidity threshold (was 20k)
+    EXCELLENT_LIQUIDITY_USD = 200_000  # Excellent liquidity (was 100k)
 
     # Activity filters
     MIN_PRICE_CHANGE = 5  # Minimum 24h price change %
@@ -89,6 +93,17 @@ class TradingConfig:
     WALLET_PRIVATE_KEY = os.getenv("THOR_WALLET_PRIVATE_KEY", "")
     WALLET_ADDRESS = os.getenv("THOR_WALLET_ADDRESS", "")
     RPC_ENDPOINT = os.getenv("SOLANA_RPC_ENDPOINT", "https://api.mainnet-beta.solana.com")
+
+    # Jito MEV configuration
+    USE_JITO = os.getenv("THOR_USE_JITO", "true").lower() == "true"
+    JITO_TIP_SOL = float(os.getenv("THOR_JITO_TIP", "0.001"))  # Default 0.001 SOL tip
+    JITO_PRIORITY = os.getenv("THOR_JITO_PRIORITY", "medium")  # min, low, medium, high, aggressive
+
+    # Token safety checks
+    ENABLE_CONTRACT_ANALYSIS = os.getenv("THOR_ENABLE_CONTRACT_ANALYSIS", "true").lower() == "true"
+    MIN_SAFETY_SCORE = int(os.getenv("THOR_MIN_SAFETY_SCORE", "50"))  # 0-100
+    SKIP_MINT_AUTHORITY_TOKENS = os.getenv("THOR_SKIP_MINT_AUTHORITY", "true").lower() == "true"
+    SKIP_FREEZE_AUTHORITY_TOKENS = os.getenv("THOR_SKIP_FREEZE_AUTHORITY", "true").lower() == "true"
 
     # Position sizing
     MAX_POSITION_SIZE_USD = float(os.getenv("THOR_MAX_POSITION_SIZE", "1000"))

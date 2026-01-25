@@ -1,8 +1,8 @@
 #!/bin/bash
-# Thor Memecoin Sniping Bot - Quick Start Script
+# Thor Memecoin Sniping Bot - GUI Mode Launcher
 
-echo "🔨 Thor Memecoin Sniping Bot"
-echo "================================"
+echo "🔨 Thor Memecoin Sniping Bot - GUI Mode"
+echo "========================================"
 echo ""
 
 # Check if virtual environment exists
@@ -33,10 +33,6 @@ if [ ! -f ".env" ]; then
     echo "🔴 CRITICAL: You must edit .env with your wallet credentials!"
     echo "   nano .env"
     echo ""
-    echo "Required fields:"
-    echo "  - THOR_WALLET_PRIVATE_KEY"
-    echo "  - THOR_WALLET_ADDRESS"
-    echo ""
     read -p "Press Enter after editing .env, or Ctrl+C to exit..."
 fi
 
@@ -50,12 +46,12 @@ echo ""
 echo "Safety reminders:"
 echo "  ✅ Start with minimal funds (e.g., 0.1 SOL)"
 echo "  ✅ Set THOR_MAX_POSITION_SIZE=10 in .env"
-echo "  ✅ Test emergency stop (s key) immediately"
-echo "  ✅ Monitor first 10 cycles closely"
+echo "  ✅ Test thoroughly before using large amounts"
+echo "  ✅ Use the GUI controls to monitor in real-time"
 echo ""
-echo "🚀 Launching Thor in 2 seconds..."
+echo "🚀 Launching Thor GUI..."
 echo ""
-sleep 2
+sleep 1
 
-# Use venv python to ensure all packages are available
-./venv/bin/python3 main.py
+# Launch GUI
+./venv/bin/python3 gui.py

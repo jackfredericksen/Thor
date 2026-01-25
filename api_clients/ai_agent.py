@@ -51,8 +51,10 @@ class LocalLLMAgent:
         self.fallback_models = [
             'llama3.1:70b',
             'llama3.1:8b',
+            'llama3.1:latest',  # Common 8B variant
             'qwen2.5:72b',
             'qwen2.5:32b',
+            'qwen3:latest',  # Qwen 3 8B
             'mixtral:8x7b'
         ]
 

@@ -1,6 +1,41 @@
+# Environment and secrets
 .env
+
+# Python
 __pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist/
+build/
+venv/
+.venv/
+
+# Testing
 test.py
+*.test.py
+
+# Logs
 logs/
 *.log
-logs/errors.log
+
+# Planning documents (internal development)
+*_PLAN.md
+*_PLANNING.md
+AGENTIC_AI_INTEGRATION_PLAN.md
+TERMINAL_UI_PLAN.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

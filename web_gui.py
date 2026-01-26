@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Thor Memecoin Sniping Bot - Web-based GUI
-Simple Flask-based interface accessible via browser
+Thor Memecoin Sniping Bot - Modern Web Dashboard
+Flask-based interface with real-time updates and social sentiment tracking
 """
 
 from flask import Flask, render_template, jsonify, request
@@ -26,7 +26,9 @@ stats_data = {
     'total_filtered': 0,
     'total_trades': 0,
     'uptime': 0,
-    'status': 'stopped'
+    'status': 'stopped',
+    'ai_active': False,
+    'ai_decisions': 0
 }
 
 latest_tokens = []
@@ -74,8 +76,8 @@ def run_bot_loop():
 
 @app.route('/')
 def index():
-    """Main page"""
-    return render_template('index.html')
+    """Main dashboard page"""
+    return render_template('dashboard.html')
 
 @app.route('/api/status')
 def get_status():
@@ -88,15 +90,41 @@ def get_status():
 
 @app.route('/api/tokens')
 def get_tokens():
-    """Get latest tokens"""
+    """Get latest tokens with full analytics"""
     tokens_formatted = []
     for token in latest_tokens:
+        # Get validation results if available
+        validation = token.get('validation', {})
+
         tokens_formatted.append({
             'symbol': token.get('symbol', 'N/A'),
-            'price': f"${token.get('price_usd', 0):.8f}",
-            'change': f"{token.get('price_change_24h', 0):+.2f}%",
-            'volume': f"${token.get('daily_volume_usd', 0):,.0f}",
-            'score': f"{token.get('filter_score', 0):.3f}"
+            'address': token.get('token_address', '')[:8] + '...' if token.get('token_address') else 'N/A',
+            'price': token.get('price_usd', 0),
+            'price_display': f"${token.get('price_usd', 0):.8f}",
+            'change': token.get('price_change_24h', 0),
+            'change_display': f"{token.get('price_change_24h', 0):+.2f}%",
+            'volume': token.get('daily_volume_usd', 0),
+            'volume_display': f"${token.get('daily_volume_usd', 0):,.0f}",
+            'liquidity': token.get('liquidity_usd', 0),
+            'liquidity_display': f"${token.get('liquidity_usd', 0):,.0f}",
+            'market_cap': token.get('market_cap', 0),
+            'market_cap_display': f"${token.get('market_cap', 0):,.0f}",
+            'holders': token.get('holder_count', 0),
+            'age_hours': token.get('age_hours', 0),
+            'score': token.get('filter_score', 0),
+            'score_display': f"{token.get('filter_score', 0):.3f}",
+            # Validation layer results
+            'contract_safe': validation.get('contract_safe', None),
+            'momentum_score': validation.get('momentum_score', 0),
+            'timing_score': validation.get('timing_score', 0),
+            'social_score': validation.get('social_score', 0),
+            'social_mentions': validation.get('social_mentions', 0),
+            'social_sentiment': validation.get('social_sentiment', 0),
+            'curve_health': validation.get('curve_health', 0),
+            # AI decision if available
+            'ai_decision': validation.get('ai_decision', None),
+            'ai_confidence': validation.get('ai_confidence', 0),
+            'ai_reasoning': validation.get('ai_reasoning', ''),
         })
     return jsonify(tokens_formatted)
 
@@ -143,6 +171,41 @@ def get_portfolio():
     if bot and hasattr(bot, 'trader'):
         return jsonify(bot.trader.get_portfolio_summary())
     return jsonify({})
+
+@app.route('/api/dashboard')
+def get_dashboard():
+    """Get complete dashboard data in one request"""
+    validation_stats = {}
+    portfolio = {}
+    ai_stats = {
+        'enabled': False,
+        'model': 'None',
+        'total_decisions': 0,
+        'avg_confidence': 0
+    }
+
+    if bot and hasattr(bot, 'trader'):
+        validation_stats = bot.trader.get_validation_stats()
+        portfolio = bot.trader.get_portfolio_summary()
+
+        # Get AI stats if enabled
+        if hasattr(bot.trader, 'ai_agent') and bot.trader.ai_agent:
+            ai_stats = {
+                'enabled': True,
+                'model': bot.trader.ai_agent.model,
+                'total_decisions': bot.trader.ai_agent.total_decisions,
+                'avg_confidence': 0  # TODO: Calculate from decision history
+            }
+
+    return jsonify({
+        'status': stats_data,
+        'validation': validation_stats,
+        'portfolio': portfolio,
+        'ai': ai_stats,
+        'tokens': latest_tokens[:10],  # Top 10 tokens
+        'recent_trades': latest_trades[-10:],  # Last 10 trades
+        'logs': system_logs[-20:]  # Last 20 logs
+    })
 
 @app.route('/api/control', methods=['POST'])
 def control():
@@ -706,12 +769,10 @@ def main():
     # Import bot
     from main import TradingBot
 
-    print("🔨 Thor Memecoin Sniping Bot - Web GUI")
+    print("🔨 Thor Memecoin Sniping Bot - Modern Web Dashboard")
     print("=" * 60)
     print("")
 
-    # Create HTML template
-    create_html_template()
     add_log("Web GUI initialized", "INFO")
 
     # Initialize bot

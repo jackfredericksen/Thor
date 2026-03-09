@@ -77,3 +77,16 @@ class Storage:
                 "INSERT INTO order_status (order_id, status) VALUES (?, ?)",
                 (order_id, status),
             )
+
+    def close(self):
+        """Close the database connection."""
+        with self.lock:
+            if self.conn:
+                self.conn.close()
+                self.conn = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass

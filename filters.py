@@ -62,6 +62,7 @@ class TokenFilter:
     def __init__(self, token_analyzer=None):
         # Comprehensive filter categories
         self.filters = {
+            'dex_hotness': self._check_dex_hotness,           # DexScreener HotScanner score
             'age_and_timing': self._check_age_and_timing,
             'activity_and_momentum': self._check_activity_and_momentum,
             'liquidity_and_tradability': self._check_liquidity_and_tradability,
@@ -70,14 +71,16 @@ class TokenFilter:
             'risk_and_safety': self._check_risk_and_safety,
         }
 
-        # Adjusted weights for memecoin trading
+        # When dex_hotness_score is present (HotScanner tokens), it carries 0.25 weight.
+        # Non-scanner tokens score 0 on dex_hotness, so their other filters compensate.
         self.filter_weights = {
-            'age_and_timing': 0.20,           # When was it created/discovered
-            'activity_and_momentum': 0.25,    # Volume, price action, buzz
-            'liquidity_and_tradability': 0.15, # Can we actually trade it
-            'size_and_valuation': 0.10,       # Market cap considerations
-            'source_and_discovery': 0.10,     # Where did we find it
-            'risk_and_safety': 0.20,          # Contract analysis & safety (INCREASED)
+            'dex_hotness': 0.25,              # DexScreener composite hotness (primary)
+            'age_and_timing': 0.15,
+            'activity_and_momentum': 0.15,
+            'liquidity_and_tradability': 0.15,
+            'size_and_valuation': 0.10,
+            'source_and_discovery': 0.10,
+            'risk_and_safety': 0.10,
         }
 
         # Token analyzer for contract checks
@@ -130,6 +133,61 @@ class TokenFilter:
             warnings=warnings
         )
     
+    def _check_dex_hotness(self, token_info: Dict) -> Dict:
+        """
+        Primary filter: DexScreener HotScanner composite score (0-100).
+
+        Tokens from the HotScanner carry a professionally calculated score
+        incorporating volume velocity, transaction velocity, liquidity depth,
+        buy pressure, boost signals, recency, and momentum analytics.
+
+        Non-scanner tokens score 0 here but pass through (no hard reject).
+        """
+        dex_score = float(token_info.get("dex_hotness_score", 0.0))
+
+        if dex_score <= 0:
+            # Not from HotScanner - neutral (other filters will decide)
+            return {"passed": True, "reason": "No DexScreener score (non-scanner token)", "score": 0.0}
+
+        # Normalise 0-100 → 0-1
+        normalised = min(dex_score / 100.0, 1.0)
+
+        # Pull in advanced analytics for richer signals
+        analytics = token_info.get("dex_analytics", {})
+        tags = token_info.get("dex_tags", [])
+        warnings = []
+
+        breakout_readiness = float(analytics.get("breakout_readiness", 0.0))
+        risk_score = float(analytics.get("risk_score", 50.0))
+        risk_flags = analytics.get("risk_flags", [])
+        fast_decay = bool(analytics.get("fast_decay", False))
+
+        # Build informative reason string
+        tag_str = ", ".join(tags) if tags else "none"
+        reason = f"DexScreener hotness={dex_score:.1f}/100 | breakout={breakout_readiness:.0f} | tags=[{tag_str}]"
+
+        # Apply risk warnings
+        if risk_flags:
+            warnings.append(f"Risk flags: {', '.join(risk_flags)}")
+        if fast_decay:
+            warnings.append("Momentum decaying fast")
+
+        # Score: base normalised score with small bonuses for quality signals
+        score = normalised
+        if breakout_readiness >= 68:
+            score = min(score + 0.05, 1.0)
+        if "rs-leader" in tags:
+            score = min(score + 0.05, 1.0)
+        if fast_decay:
+            score = max(score - 0.10, 0.0)
+        if risk_score < 50:
+            score = max(score - 0.05, 0.0)
+
+        result = {"passed": True, "reason": reason, "score": score}
+        if warnings:
+            result["warning"] = "; ".join(warnings)
+        return result
+
     def _check_age_and_timing(self, token_info: Dict) -> Dict:
         """Check token age and timing factors - much more lenient"""
         age_hours = float(token_info.get("age_hours", 9999))

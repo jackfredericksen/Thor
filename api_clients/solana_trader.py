@@ -81,6 +81,21 @@ class SolanaTrader:
             logger.error(f"Error getting SOL balance: {e}")
             return 0.0
 
+    @staticmethod
+    async def get_sol_price_usd() -> float:
+        """Fetch live SOL/USD price from Jupiter Price API v6."""
+        try:
+            import httpx
+            SOL_MINT = "So11111111111111111111111111111111111111112"
+            url = f"https://price.jup.ag/v6/price?ids={SOL_MINT}"
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(url)
+                data = resp.json()
+                return float(data["data"][SOL_MINT]["price"])
+        except Exception as e:
+            logger.warning(f"Could not fetch SOL price, defaulting to 150.0: {e}")
+            return 150.0
+
     async def get_token_balance(self, token_mint: str) -> float:
         """Get token balance for a specific mint"""
         try:

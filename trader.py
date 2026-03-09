@@ -328,7 +328,7 @@ class Trader:
                 # Market context
                 market_context = {
                     'sentiment': 'NEUTRAL',  # TODO: Add market sentiment tracker
-                    'sol_price': 100.0,  # TODO: Get real SOL price
+                    'sol_price': asyncio.run(self.solana_client.get_sol_price_usd()),
                     'volatility': 'MEDIUM'  # TODO: Calculate volatility
                 }
 
@@ -387,14 +387,30 @@ class Trader:
                     logger.error(f"AI agent error: {e}")
                     logger.warning("Continuing with trade (AI agent failed)")
 
-            # Convert USD to SOL (simplified - should use real-time SOL price)
-            # Assuming SOL = $100 for calculation
-            sol_amount = position_size_usd / 100.0
+            # Check wallet balance before proceeding
+            sol_balance = asyncio.run(self.solana_client.get_sol_balance())
+            if sol_balance < 0.01:
+                logger.error(f"❌ TRADE BLOCKED: Insufficient SOL balance ({sol_balance:.4f} SOL)")
+                self.failed_trades += 1
+                return False
+
+            # Convert USD to SOL using live price
+            sol_price = asyncio.run(self.solana_client.get_sol_price_usd())
+            sol_amount = position_size_usd / sol_price
+
+            # Verify we have enough SOL (keep 5% buffer for fees)
+            if sol_amount > sol_balance * 0.95:
+                logger.error(
+                    f"❌ TRADE BLOCKED: Need {sol_amount:.4f} SOL but only have {sol_balance:.4f} SOL"
+                )
+                self.failed_trades += 1
+                return False
 
             logger.info(
                 f"🚀 Executing LIVE BUY: {symbol}"
             )
-            logger.info(f"   Amount: {sol_amount:.4f} SOL (~${position_size_usd:.2f})")
+            logger.info(f"   Amount: {sol_amount:.4f} SOL (~${position_size_usd:.2f} @ ${sol_price:.2f}/SOL)")
+            logger.info(f"   Balance: {sol_balance:.4f} SOL available")
             logger.info(f"   Token: {token_address}")
             logger.info(f"   Slippage: {TradingConfig.DEFAULT_SLIPPAGE * 100:.1f}%")
 

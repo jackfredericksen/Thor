@@ -48,6 +48,8 @@ class SocialAnalyzer:
     - Trending topic detection
     """
 
+    _CACHE_MAX_SIZE = 200
+
     def __init__(self):
         self.cache = {}  # Token -> (timestamp, metrics)
         self.cache_ttl = 300  # 5 minutes
@@ -162,8 +164,11 @@ class SocialAnalyzer:
                 strengths=strengths
             )
 
-            # Cache result
+            # Cache result (evict oldest if over limit)
             self.cache[token_address] = (time.time(), metrics)
+            if len(self.cache) > self._CACHE_MAX_SIZE:
+                oldest = min(self.cache, key=lambda k: self.cache[k][0])
+                del self.cache[oldest]
 
             return metrics
 

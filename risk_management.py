@@ -1,10 +1,37 @@
 # risk_management.py - Fixed to work with new config structure
 
 import logging
+from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Position:
+    symbol: str
+    quantity: float
+    entry_price: float
+    current_price: float = 0.0
+
+    @property
+    def unrealized_pnl(self) -> float:
+        if self.current_price and self.entry_price:
+            return (self.current_price - self.entry_price) * self.quantity
+        return 0.0
+
+    @property
+    def cost_basis(self) -> float:
+        return self.entry_price * self.quantity
+
+
+@dataclass
+class RiskMetrics:
+    total_portfolio_value: float = 0.0
+    total_exposure: float = 0.0
+    number_of_positions: int = 0
+    total_unrealized_pnl: float = 0.0
 
 class RiskManager:
     """Risk management system for trading operations"""
@@ -40,7 +67,7 @@ class RiskManager:
             self.max_concurrent_positions = 50
         
         # Initialize tracking dictionaries
-        self.positions = {}  # Track open positions
+        self.positions: Dict[str, Position] = {}  # Track open positions
         self.trade_history = []  # Track all trades
         self.daily_trades = {}  # Track daily trade counts
         
@@ -124,21 +151,22 @@ class RiskManager:
     def can_place_trade(self, token_address: str) -> tuple[bool, str]:
         """Check if we can place a trade based on risk limits"""
         try:
-            # Check daily trade limit
             today = datetime.now().date()
-            # This would need to be implemented with actual trade counting
-            # For now, always allow trades
-            
-            # Check concurrent positions
-            # This would need to be implemented with actual position tracking
-            # For now, always allow trades
-            
-            # Check if we've traded this token recently (cooldown)
-            # This would need to be implemented with trade history
-            # For now, always allow trades
-            
+
+            # Check daily trade limit
+            if self.daily_trades.get(today, 0) >= self.max_daily_trades:
+                return False, f"Daily trade limit reached ({self.max_daily_trades})"
+
+            # Check concurrent position limit
+            if len(self.positions) >= self.max_concurrent_positions:
+                return False, f"Max concurrent positions reached ({self.max_concurrent_positions})"
+
+            # Prevent duplicate position in same token
+            if token_address in self.positions:
+                return False, f"Position already open for {token_address[:8]}"
+
             return True, "Trade allowed"
-            
+
         except Exception as e:
             logger.error(f"Error checking trade eligibility: {e}")
             return False, f"Risk check failed: {e}"
@@ -183,7 +211,7 @@ class RiskManager:
             logger.error(f"Error checking stop loss: {e}")
             return False
     
-    def should_take_profit(self, current_price: float, entry_price: float, 
+    def should_take_profit(self, current_price: float, entry_price: float,
                           position_type: str = "long") -> bool:
         """Check if position should take profit"""
         try:
@@ -191,9 +219,51 @@ class RiskManager:
                 profit_percent = (current_price - entry_price) / entry_price
             else:  # short
                 profit_percent = (entry_price - current_price) / entry_price
-            
+
             return profit_percent >= self.take_profit_percent
-            
+
         except Exception as e:
             logger.error(f"Error checking take profit: {e}")
             return False
+
+    def add_position(self, token_address: str, symbol: str, quantity: float, entry_price: float) -> None:
+        """Record a new open position."""
+        self.positions[token_address] = Position(
+            symbol=symbol,
+            quantity=quantity,
+            entry_price=entry_price,
+            current_price=entry_price,
+        )
+        today = datetime.now().date()
+        self.daily_trades[today] = self.daily_trades.get(today, 0) + 1
+        logger.info(f"Position added: {symbol} qty={quantity:.4f} @ ${entry_price:.6f}")
+
+    def reduce_position(self, token_address: str, quantity: float, exit_price: float) -> float:
+        """Remove (or reduce) a position and return realized P&L."""
+        position = self.positions.pop(token_address, None)
+        if position is None:
+            return 0.0
+        realized_pnl = (exit_price - position.entry_price) * quantity
+        logger.info(
+            f"Position closed: {position.symbol} P&L=${realized_pnl:.2f}"
+        )
+        return realized_pnl
+
+    def update_prices(self, price_updates: Dict[str, float]) -> None:
+        """Update current prices for all tracked positions."""
+        for token_address, price in price_updates.items():
+            if token_address in self.positions and price > 0:
+                self.positions[token_address].current_price = price
+
+    def get_risk_metrics(self) -> RiskMetrics:
+        """Return a snapshot of current portfolio risk metrics."""
+        total_exposure = sum(p.cost_basis for p in self.positions.values())
+        total_unrealized_pnl = sum(p.unrealized_pnl for p in self.positions.values())
+        # Portfolio value = cost basis + unrealized gains
+        total_portfolio_value = total_exposure + total_unrealized_pnl
+        return RiskMetrics(
+            total_portfolio_value=total_portfolio_value,
+            total_exposure=total_exposure,
+            number_of_positions=len(self.positions),
+            total_unrealized_pnl=total_unrealized_pnl,
+        )

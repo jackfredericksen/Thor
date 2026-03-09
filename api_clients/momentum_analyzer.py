@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 class MomentumAnalyzer:
     """Analyze buy/sell pressure and trading momentum"""
 
+    _CACHE_MAX_SIZE = 200
+
     def __init__(self):
         self.dexscreener_base = "https://api.dexscreener.com/latest/dex"
         self.cache = {}  # Cache momentum data
@@ -85,11 +87,14 @@ class MomentumAnalyzer:
                 'avg_sell_size': txn_data['avg_sell_size']
             }
 
-            # Cache result
+            # Cache result (evict oldest entries if over limit)
             self.cache[cache_key] = {
                 'timestamp': datetime.now().timestamp(),
                 'data': result
             }
+            if len(self.cache) > self._CACHE_MAX_SIZE:
+                oldest = min(self.cache, key=lambda k: self.cache[k]['timestamp'])
+                del self.cache[oldest]
 
             return result
 

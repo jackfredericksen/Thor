@@ -59,18 +59,22 @@ class DashboardComponents:
 
         table.add_column("Symbol", style="cyan", width=10)
         table.add_column("Price", style="white", justify="right", width=12)
-        table.add_column("24h Change", justify="right", width=11)
+        table.add_column("24h%", justify="right", width=8)
         table.add_column("Volume", justify="right", width=10)
-        table.add_column("Age", style="magenta", justify="right", width=8)
+        table.add_column("Age", style="magenta", justify="right", width=7)
         table.add_column("Score", justify="right", width=6)
+        table.add_column("Hot", justify="right", width=5)
+        table.add_column("Source", style="dim", width=12)
 
         for token in tokens[:10]:
             symbol = token.get('symbol', 'N/A')
-            price = token.get('price', 0)
+            price = token.get('price_usd', token.get('price', 0))
             change_24h = token.get('price_change_24h', 0)
             volume = token.get('daily_volume_usd', 0)
             age_hours = token.get('age_hours', 0)
             score = token.get('filter_score', 0)
+            dex_hot = token.get('dex_hotness_score')
+            source = token.get('discovery_source', 'unknown')
 
             # Format values
             price_str = f"${price:.6f}" if price < 0.01 else f"${price:.4f}"
@@ -78,10 +82,13 @@ class DashboardComponents:
             volume_str = self.theme.format_currency(volume)
             age_str = f"{age_hours:.0f}h" if age_hours < 24 else f"{age_hours/24:.1f}d"
             score_str = f"{score:.2f}"
+            hot_str = f"{dex_hot:.0f}" if dex_hot is not None else "-"
+            source_str = source.replace('dex_hot_scanner', '🔥dex').replace('gmgn_hot_sol', 'gmgn').replace('_', ' ')[:12]
 
-            # Color based on change
+            # Colors
             change_color = "bright_green" if change_24h > 0 else "bright_red"
             score_color = "green" if score > 0.7 else "yellow" if score > 0.5 else "white"
+            hot_color = "bright_green" if (dex_hot or 0) >= 70 else "yellow" if (dex_hot or 0) >= 50 else "white"
 
             table.add_row(
                 symbol,
@@ -89,11 +96,13 @@ class DashboardComponents:
                 Text(change_str, style=change_color),
                 volume_str,
                 age_str,
-                Text(score_str, style=score_color)
+                Text(score_str, style=score_color),
+                Text(hot_str, style=hot_color),
+                source_str,
             )
 
         if not tokens:
-            table.add_row("No tokens yet...", "", "", "", "", "")
+            table.add_row("No tokens yet...", "", "", "", "", "", "", "")
 
         return Panel(table, border_style="yellow")
 

@@ -5,6 +5,7 @@ Flask-based interface with real-time updates and social sentiment tracking
 """
 
 from flask import Flask, render_template, jsonify, request
+import asyncio
 import threading
 import time
 from datetime import datetime
@@ -35,6 +36,16 @@ latest_tokens = []
 latest_trades = []
 system_logs = []
 
+def _get_sol_balance() -> float:
+    """Fetch live SOL wallet balance; returns 0.0 on any error."""
+    try:
+        if bot and hasattr(bot, 'trader') and hasattr(bot.trader, 'solana_client'):
+            return asyncio.run(bot.trader.solana_client.get_sol_balance())
+    except Exception:
+        pass
+    return 0.0
+
+
 def add_log(message: str, level: str = "INFO"):
     """Add log message"""
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -57,9 +68,21 @@ def run_bot_loop():
         if not bot_paused:
             try:
                 add_log(f"Starting cycle {bot.cycle_count + 1}...", "INFO")
-                bot.run_single_cycle()
 
-                # Update data
+                # --- Discovery + filtering (fast, update UI immediately after) ---
+                filtered = bot.discover_and_filter_tokens()
+                latest_tokens = bot.get_latest_tokens(20)  # visible right after discovery
+                stats_data = bot.get_dashboard_stats()
+                stats_data['status'] = 'running'
+
+                # --- Process tokens (slow - trading decisions) ---
+                if filtered:
+                    bot.process_tokens(filtered)
+
+                # --- Smart money + final state sync ---
+                bot.monitor_smart_money()
+                bot.cycle_count += 1
+
                 stats_data = bot.get_dashboard_stats()
                 stats_data['status'] = 'running'
                 latest_tokens = bot.get_latest_tokens(20)
@@ -81,24 +104,34 @@ def index():
 
 @app.route('/api/status')
 def get_status():
-    """Get current status"""
+    """Get current status — reads live from bot so uptime/counts always update."""
+    live_stats = dict(stats_data)
+    if bot is not None:
+        live_stats['uptime'] = time.time() - getattr(bot, 'start_time', time.time())
+        live_stats['cycle_count'] = getattr(bot, 'cycle_count', 0)
+        live_stats['total_discovered'] = getattr(bot, 'total_tokens_discovered', 0)
+        live_stats['total_filtered'] = getattr(bot, 'total_tokens_filtered', 0)
+        live_stats['total_trades'] = getattr(bot, 'total_trades_executed', 0)
+        live_stats['sol_balance'] = _get_sol_balance()
     return jsonify({
         'running': bot_running,
         'paused': bot_paused,
-        'stats': stats_data
+        'stats': live_stats
     })
 
 @app.route('/api/tokens')
 def get_tokens():
     """Get latest tokens with full analytics"""
+    # Fall back to reading directly from bot so data shows up mid-cycle
+    tokens_source = latest_tokens or (bot.get_latest_tokens(20) if bot else [])
     tokens_formatted = []
-    for token in latest_tokens:
+    for token in tokens_source:
         # Get validation results if available
         validation = token.get('validation', {})
 
         tokens_formatted.append({
             'symbol': token.get('symbol', 'N/A'),
-            'address': token.get('token_address', '')[:8] + '...' if token.get('token_address') else 'N/A',
+            'address': (token.get('address') or token.get('token_address') or '')[:8] + '...',
             'price': token.get('price_usd', 0),
             'price_display': f"${token.get('price_usd', 0):.8f}",
             'change': token.get('price_change_24h', 0),
@@ -113,6 +146,11 @@ def get_tokens():
             'age_hours': token.get('age_hours', 0),
             'score': token.get('filter_score', 0),
             'score_display': f"{token.get('filter_score', 0):.3f}",
+            # DexScreener HotScanner data
+            'dex_hotness_score': token.get('dex_hotness_score'),
+            'dex_tags': token.get('dex_tags', []),
+            'discovery_source': token.get('discovery_source', 'unknown'),
+            'breakout_readiness': (token.get('dex_analytics') or {}).get('breakout_readiness'),
             # Validation layer results
             'contract_safe': validation.get('contract_safe', None),
             'momentum_score': validation.get('momentum_score', 0),
@@ -197,14 +235,27 @@ def get_dashboard():
                 'avg_confidence': 0  # TODO: Calculate from decision history
             }
 
+    # Build live stats so uptime/counts always reflect current bot state
+    live_stats = dict(stats_data)
+    if bot is not None:
+        live_stats['uptime'] = time.time() - getattr(bot, 'start_time', time.time())
+        live_stats['cycle_count'] = getattr(bot, 'cycle_count', 0)
+        live_stats['total_discovered'] = getattr(bot, 'total_tokens_discovered', 0)
+        live_stats['total_filtered'] = getattr(bot, 'total_tokens_filtered', 0)
+        live_stats['total_trades'] = getattr(bot, 'total_trades_executed', 0)
+        live_stats['sol_balance'] = _get_sol_balance()
+
+    live_tokens = latest_tokens or (bot.get_latest_tokens(20) if bot else [])
+    live_trades = latest_trades or (bot.get_recent_trades(10) if bot else [])
+
     return jsonify({
-        'status': stats_data,
+        'status': live_stats,
         'validation': validation_stats,
         'portfolio': portfolio,
         'ai': ai_stats,
-        'tokens': latest_tokens[:10],  # Top 10 tokens
-        'recent_trades': latest_trades[-10:],  # Last 10 trades
-        'logs': system_logs[-20:]  # Last 20 logs
+        'tokens': live_tokens[:10],
+        'recent_trades': live_trades[-10:],
+        'logs': system_logs[-20:]
     })
 
 @app.route('/api/control', methods=['POST'])
@@ -442,10 +493,13 @@ def create_html_template():
                         <th>24h Change</th>
                         <th>Volume</th>
                         <th>Score</th>
+                        <th>Hot🔥</th>
+                        <th>Tags</th>
+                        <th>Source</th>
                     </tr>
                 </thead>
                 <tbody id="tokensBody">
-                    <tr><td colspan="5" class="empty-state">No tokens discovered yet. Click START to begin.</td></tr>
+                    <tr><td colspan="8" class="empty-state">No tokens discovered yet. Click START to begin.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -655,15 +709,23 @@ def create_html_template():
                 const tokensBody = document.getElementById('tokensBody');
 
                 if (tokens.length > 0) {
-                    tokensBody.innerHTML = tokens.map(t => `
-                        <tr>
+                    tokensBody.innerHTML = tokens.map(t => {
+                        const hotScore = t.dex_hotness_score != null ? t.dex_hotness_score.toFixed(0) : '-';
+                        const hotColor = t.dex_hotness_score >= 70 ? '#4CAF50' : t.dex_hotness_score >= 50 ? '#FF9800' : '#aaa';
+                        const tags = (t.dex_tags || []).slice(0, 2).join(' ') || '-';
+                        const src = (t.discovery_source || 'unknown').replace('dex_hot_scanner', '🔥dex').replace('gmgn_hot_sol', 'gmgn').replace(/_/g, ' ');
+                        const changeColor = t.change >= 0 ? '#4CAF50' : '#f44336';
+                        return `<tr>
                             <td>${t.symbol}</td>
-                            <td>${t.price}</td>
-                            <td>${t.change}</td>
-                            <td>${t.volume}</td>
-                            <td>${t.score}</td>
-                        </tr>
-                    `).join('');
+                            <td>${t.price_display}</td>
+                            <td style="color:${changeColor}">${t.change_display}</td>
+                            <td>${t.volume_display}</td>
+                            <td>${t.score_display}</td>
+                            <td style="color:${hotColor};font-weight:bold">${hotScore}</td>
+                            <td style="font-size:11px">${tags}</td>
+                            <td style="font-size:11px;opacity:0.7">${src}</td>
+                        </tr>`;
+                    }).join('');
                 }
 
                 // Update trades

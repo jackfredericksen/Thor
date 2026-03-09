@@ -1,4 +1,5 @@
 # api_clients/dexscreener.py
+import datetime
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -207,27 +208,6 @@ class DexscreenerClient(BaseAPIClient):
             logger.error(f"Failed to fetch token details for {token_address}: {str(e)}")
             return None
 
-    def search_tokens(self, query: str, chain: str = "solana") -> List[Dict]:
-        """Search for tokens by name or symbol"""
-        try:
-            endpoint = "search"
-            params = {"q": query, "chain": chain}
-
-            response = self.get(endpoint, params)
-            pairs = response.get("pairs", [])
-
-            processed_results = []
-            for pair in pairs:
-                processed_pair = self._process_token_data(pair)
-                if processed_pair:
-                    processed_results.append(processed_pair)
-
-            return processed_results
-
-        except Exception as e:
-            logger.error(f"Failed to search tokens for '{query}': {str(e)}")
-            return []
-
     def get_token_price_history(
         self, token_address: str, timeframe: str = "1h"
     ) -> List[Dict]:
@@ -255,8 +235,6 @@ class DexscreenerClient(BaseAPIClient):
             created_at = raw_data.get("pairCreatedAt")
             age_hours = 9999  # Default to very old if no creation time
             if created_at:
-                import datetime
-
                 created_time = datetime.datetime.fromtimestamp(created_at / 1000)
                 age_hours = (
                     datetime.datetime.now() - created_time

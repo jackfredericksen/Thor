@@ -173,6 +173,41 @@ class DiscoveryConfig:
     MAX_DATA_AGE_MINUTES = 30  # Ignore data older than 30 minutes
 
 
+# DexScreener HotScanner configuration
+class DexScannerConfig:
+    """Configuration for the integrated DexScreener HotScanner."""
+
+    _enabled_env = os.getenv("THOR_DEX_SCANNER_ENABLED", "true")
+    ENABLED: bool = _enabled_env.lower() == "true"
+
+    # Chains to scan (solana is primary; add "base", "ethereum" to expand)
+    CHAINS: tuple = ("solana",)
+
+    # Maximum number of hot tokens returned per scan cycle
+    SCAN_LIMIT: int = int(os.getenv("THOR_DEX_SCAN_LIMIT", "30"))
+
+    # Minimum filter thresholds for HotScanner
+    MIN_LIQUIDITY_USD: float = float(
+        os.getenv("THOR_DEX_MIN_LIQUIDITY", "20000")
+    )
+    MIN_VOLUME_H24_USD: float = float(
+        os.getenv("THOR_DEX_MIN_VOLUME", "40000")
+    )
+    MIN_TXNS_H1: int = int(os.getenv("THOR_DEX_MIN_TXNS_H1", "15"))
+    MIN_PRICE_CHANGE_H1: float = float(
+        os.getenv("THOR_DEX_MIN_PRICE_CHANGE_H1", "-10.0")
+    )
+
+    # Scanner result cache TTL (seconds)
+    CACHE_TTL_SECONDS: int = 60
+
+    # MCP server settings
+    _mcp_env = os.getenv("THOR_MCP_ENABLED", "false")
+    MCP_ENABLED: bool = _mcp_env.lower() == "true"
+    MCP_HOST: str = os.getenv("THOR_MCP_HOST", "127.0.0.1")
+    MCP_PORT: int = int(os.getenv("THOR_MCP_PORT", "8765"))
+
+
 # Performance and monitoring
 class MonitoringConfig:
     """Performance monitoring and logging"""

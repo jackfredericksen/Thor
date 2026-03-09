@@ -1,15 +1,151 @@
 # token_discovery.py - Working endpoints verified 2025
+# Integrates DexScreener HotScanner as primary high-quality discovery source
 
 import requests
 import time
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
+
+class DexHotScannerSource:
+    """
+    High-quality token discovery via DexScreener HotScanner.
+
+    Uses the professional scanner from dexscreener-cli-mcp-tool to find
+    trending tokens with advanced composite scoring (0-100 scale), including:
+    - Volume velocity, transaction velocity
+    - Compression score + breakout readiness
+    - Relative strength vs chain baseline
+    - Boost/profile signals
+    - Risk profiling and momentum decay
+    """
+
+    def __init__(
+        self,
+        chains: tuple = ("solana",),
+        limit: int = 30,
+        min_liquidity_usd: float = 20_000.0,
+        min_volume_h24_usd: float = 40_000.0,
+        min_txns_h1: int = 15,
+    ) -> None:
+        self.chains = chains
+        self.limit = limit
+        self.min_liquidity_usd = min_liquidity_usd
+        self.min_volume_h24_usd = min_volume_h24_usd
+        self.min_txns_h1 = min_txns_h1
+        self._last_run: float = 0.0
+        self._cache: List[Dict[str, Any]] = []
+        self._cache_ttl: float = 60.0  # Cache results for 60 seconds
+
+    def fetch(self) -> List[Dict[str, Any]]:
+        """
+        Run HotScanner and convert HotTokenCandidate objects to Thor token dicts.
+        Results are cached for 60 seconds to avoid hammering the API.
+        """
+        now = time.time()
+        if self._cache and (now - self._last_run) < self._cache_ttl:
+            logger.info(f"DexHotScanner: returning {len(self._cache)} cached tokens")
+            return self._cache
+
+        try:
+            from api_clients.dex_scanner import ScanFilters, run_hot_scan
+
+            filters = ScanFilters(
+                chains=self.chains,
+                limit=self.limit,
+                min_liquidity_usd=self.min_liquidity_usd,
+                min_volume_h24_usd=self.min_volume_h24_usd,
+                min_txns_h1=self.min_txns_h1,
+            )
+            candidates = run_hot_scan(filters)
+            tokens = [self._candidate_to_token(c) for c in candidates]
+            self._cache = tokens
+            self._last_run = now
+            logger.info(f"DexHotScanner: discovered {len(tokens)} hot tokens")
+            return tokens
+
+        except Exception as exc:
+            logger.error(f"DexHotScanner failed: {exc}")
+            return self._cache  # return stale cache on failure
+
+    @staticmethod
+    def _candidate_to_token(candidate) -> Dict[str, Any]:
+        """Convert HotTokenCandidate to Thor's standard token dict format."""
+        pair = candidate.pair
+        analytics = candidate.analytics
+
+        return {
+            # Core identifiers
+            "address": pair.base_address,
+            "symbol": pair.base_symbol,
+            "name": pair.base_name,
+            "chain": pair.chain_id,
+            # Price and market data
+            "price_usd": pair.price_usd,
+            "price_change_24h": pair.price_change_h24,
+            "price_change_1h": pair.price_change_h1,
+            "market_cap": pair.market_cap if pair.market_cap > 0 else pair.fdv,
+            "fdv": pair.fdv,
+            "liquidity_usd": pair.liquidity_usd,
+            # Volume and activity
+            "daily_volume_usd": pair.volume_h24,
+            "volume_24h": pair.volume_h24,
+            "volume_6h": pair.volume_h6,
+            "volume_1h": pair.volume_h1,
+            "txns_24h": pair.txns_h24,
+            "buys_24h": pair.buys_h24,
+            "sells_24h": pair.sells_h24,
+            "txns_1h": pair.txns_h1,
+            "buys_1h": pair.buys_h1,
+            "sells_1h": pair.sells_h1,
+            # Age and timing
+            "age_hours": pair.age_hours if pair.age_hours is not None else 9999.0,
+            # Pair info
+            "pair_address": pair.pair_address,
+            "dex_id": pair.dex_id,
+            "quote_symbol": pair.quote_symbol,
+            "dex_pair_url": pair.pair_url,
+            # DexScreener hotness scoring (0-100)
+            "dex_hotness_score": candidate.score,
+            "dex_base_score": analytics.base_score,
+            "dex_tags": list(candidate.tags),
+            "dex_discovery": candidate.discovery,
+            # Advanced analytics
+            "dex_analytics": {
+                "compression_score": analytics.compression_score,
+                "breakout_readiness": analytics.breakout_readiness,
+                "volume_velocity": analytics.volume_velocity,
+                "txn_velocity": analytics.txn_velocity,
+                "relative_strength": analytics.relative_strength,
+                "chain_baseline_h1": analytics.chain_baseline_h1,
+                "boost_velocity": analytics.boost_velocity,
+                "momentum_half_life_min": analytics.momentum_half_life_min,
+                "momentum_decay_ratio": analytics.momentum_decay_ratio,
+                "fast_decay": analytics.fast_decay,
+                "risk_score": analytics.risk_score,
+                "risk_penalty": analytics.risk_penalty,
+                "risk_flags": list(analytics.risk_flags),
+                "score_components": dict(analytics.score_components),
+            },
+            # Boost/profile signals
+            "dex_boost_total": candidate.boost_total,
+            "dex_boost_count": candidate.boost_count,
+            "dex_has_profile": candidate.has_profile,
+            # Holder data (if available)
+            "holder_count": pair.holders_count,
+            # Memecoin score proxy from DexScreener hotness
+            "memecoin_score": candidate.score / 25.0,  # Scale 0-100 → 0-4
+            # Source metadata
+            "discovery_source": "dex_hot_scanner",
+            "source_priority": 10,
+            "discovered_at": datetime.now().isoformat(),
+        }
 
 @dataclass
 class TokenSource:
@@ -26,9 +162,10 @@ class TokenDiscovery:
     Production-ready token discovery with verified working endpoints (2025)
 
     Sources verified:
+    - DexScreener HotScanner (primary, advanced scoring)
     - GMGN.ai (public, free)
     - PumpPortal (public, free)
-    - DexScreener (public, free)
+    - DexScreener search (public, free)
     - Jupiter (public, free)
     """
 
@@ -40,6 +177,15 @@ class TokenDiscovery:
         self.jupiter_cache = []
         self.jupiter_cache_time = None
         self.jupiter_cache_ttl = 1800  # 30 minutes
+
+        # DexScreener HotScanner (primary source)
+        self.dex_hot_scanner = DexHotScannerSource(
+            chains=("solana",),
+            limit=30,
+            min_liquidity_usd=20_000.0,
+            min_volume_h24_usd=40_000.0,
+            min_txns_h1=15,
+        )
 
         # Working sources - verified January 2025
         self.sources = {
@@ -108,17 +254,29 @@ class TokenDiscovery:
             session.close()
 
     def discover_all_tokens(self, max_workers: int = 4) -> List[Dict[str, Any]]:
-        """Discover tokens with proper resource management"""
+        """Discover tokens from all sources including DexScreener HotScanner."""
         all_tokens = []
         seen_addresses = set()
 
-        logger.info(f"Starting token discovery from {len(self.sources)} sources...")
+        logger.info(f"Starting token discovery (HotScanner + {len(self.sources)} sources)...")
 
-        # Sort by priority
+        # --- Step 1: DexScreener HotScanner (primary, highest-quality source) ---
+        try:
+            hot_tokens = self.dex_hot_scanner.fetch()
+            for token in hot_tokens:
+                address = token.get('address', '').lower()
+                if address and address not in seen_addresses:
+                    seen_addresses.add(address)
+                    all_tokens.append(token)
+            logger.info(f"✓ dex_hot_scanner: {len(hot_tokens)} tokens (priority: 10)")
+        except Exception as exc:
+            logger.error(f"✗ dex_hot_scanner failed: {exc}")
+
+        # --- Step 2: Supplemental sources via thread pool ---
         sorted_sources = sorted(
             self.sources.items(),
             key=lambda x: x[1].priority,
-            reverse=True
+            reverse=True,
         )
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -133,7 +291,6 @@ class TokenDiscovery:
                     tokens = future.result(timeout=15)
                     if tokens:
                         logger.info(f"✓ {source_name}: {len(tokens)} tokens (priority: {source.priority})")
-
                         for token in tokens:
                             address = token.get('address', '').lower()
                             if address and address not in seen_addresses:
@@ -144,15 +301,15 @@ class TokenDiscovery:
                                 all_tokens.append(token)
                     else:
                         logger.warning(f"⚠ {source_name}: No tokens returned")
-
                 except Exception as e:
                     logger.error(f"✗ {source_name} failed: {str(e)}")
 
-        # Sort by priority and score
+        # Sort: HotScanner tokens first (by dex_hotness_score), then by source priority + volume
         all_tokens.sort(key=lambda x: (
-            -x.get('source_priority', 0),
-            -x.get('memecoin_score', 0),
-            -x.get('daily_volume_usd', 0)
+            -x.get('dex_hotness_score', 0),      # Primary: DexScreener hotness (0-100)
+            -x.get('source_priority', 0),          # Secondary: source priority
+            -x.get('memecoin_score', 0),           # Tertiary: memecoin score
+            -x.get('daily_volume_usd', 0),         # Last resort: volume
         ))
 
         logger.info(f"✓ Total discovered: {len(all_tokens)} unique tokens")

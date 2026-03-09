@@ -15,6 +15,7 @@ import logging
 import json
 import time
 import requests
+from collections import deque
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from contextlib import contextmanager
@@ -58,9 +59,8 @@ class LocalLLMAgent:
             'mixtral:8x7b'
         ]
 
-        # Decision tracking
-        self.decision_history = []
-        self.max_history = 50
+        # Decision tracking (deque for O(1) popleft)
+        self.decision_history = deque(maxlen=50)
 
         # Performance tracking
         self.total_decisions = 0
@@ -371,9 +371,7 @@ Be conservative. Only BUY if highly confident."""
             'pnl': None  # Filled in later
         })
 
-        # Keep only recent history
-        if len(self.decision_history) > self.max_history:
-            self.decision_history.pop(0)
+        # deque(maxlen=50) auto-evicts oldest entries
 
     def update_outcome(
         self,

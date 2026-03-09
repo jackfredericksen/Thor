@@ -3,1013 +3,1037 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thor - AI Trading Dashboard</title>
+    <title>Thor — Memecoin Sniper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-card: #334155;
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --accent-blue: #3b82f6;
-            --accent-green: #10b981;
-            --accent-red: #ef4444;
-            --accent-yellow: #f59e0b;
-            --accent-purple: #8b5cf6;
-            --border-color: #475569;
+            --bg:          #060a0f;
+            --bg-1:        #0b1220;
+            --bg-2:        #0f1a2e;
+            --bg-3:        #162035;
+            --border:      rgba(255,255,255,0.06);
+            --border-glow: rgba(0,217,255,0.25);
+            --text:        #e2e8f0;
+            --text-muted:  #64748b;
+            --text-dim:    #334155;
+            --cyan:        #00d9ff;
+            --cyan-dim:    rgba(0,217,255,0.12);
+            --cyan-glow:   rgba(0,217,255,0.35);
+            --green:       #00ff94;
+            --green-dim:   rgba(0,255,148,0.1);
+            --red:         #ff4757;
+            --red-dim:     rgba(255,71,87,0.1);
+            --amber:       #ffb800;
+            --amber-dim:   rgba(255,184,0,0.1);
+            --purple:      #b16cff;
+            --purple-dim:  rgba(177,108,255,0.1);
+            --font:        'Inter', sans-serif;
+            --mono:        'JetBrains Mono', monospace;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin:0; padding:0; box-sizing:border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 20px;
+        /* ─── Animated grid background ─────────────────── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,217,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,217,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
         }
 
-        /* Header */
-        header {
-            background: var(--bg-secondary);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            animation: scanline 6s linear infinite;
+            z-index: 1;
+            opacity: 0.4;
+        }
+
+        @keyframes scanline {
+            0%   { top: 0; }
+            100% { top: 100vh; }
+        }
+
+        .app {
+            position: relative;
+            z-index: 2;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid var(--border-color);
+            flex-direction: column;
+            min-height: 100vh;
         }
 
-        .header-left {
+        /* ─── Navbar ─────────────────────────────────────── */
+        .navbar {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 24px;
+            padding: 0 24px;
+            height: 60px;
+            background: rgba(6,10,15,0.95);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
-        h1 {
-            font-size: 28px;
-            font-weight: 700;
+        .brand {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+            flex-shrink: 0;
         }
 
-        .status-indicator {
-            width: 12px;
-            height: 12px;
+        .brand-icon {
+            font-size: 22px;
+            filter: drop-shadow(0 0 8px var(--cyan));
+        }
+
+        .brand-name {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            background: linear-gradient(135deg, var(--cyan), #6ee7f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
+            flex-shrink: 0;
+        }
+
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
+            background: var(--red);
+            box-shadow: 0 0 8px var(--red);
+            animation: blink 2s ease-in-out infinite;
         }
 
-        @keyframes pulse {
+        @keyframes blink {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            50%       { opacity: 0.4; }
         }
 
-        .status-running {
-            background: var(--accent-green);
-            box-shadow: 0 0 20px var(--accent-green);
-        }
+        .status-dot.running { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-dot.paused  { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+        .status-dot.stopped { background: var(--red);   box-shadow: 0 0 8px var(--red); }
 
-        .status-paused {
-            background: var(--accent-yellow);
-            box-shadow: 0 0 20px var(--accent-yellow);
-        }
-
-        .status-stopped {
-            background: var(--accent-red);
-            box-shadow: 0 0 20px var(--accent-red);
+        #statusText {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-muted);
         }
 
         .ai-badge {
-            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+            background: linear-gradient(135deg, rgba(177,108,255,0.2), rgba(0,217,255,0.2));
+            border: 1px solid rgba(177,108,255,0.4);
+            color: var(--purple);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            display: none;
         }
 
-        .controls {
+        /* Quick stats in navbar */
+        .nav-metrics {
             display: flex;
-            gap: 12px;
+            gap: 0;
+            margin-left: auto;
         }
 
-        button {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: inline-flex;
+        .nav-metric {
+            display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 8px;
+            padding: 0 20px;
+            border-left: 1px solid var(--border);
+            line-height: 1.2;
         }
+
+        .nav-metric-val {
+            font-size: 14px;
+            font-weight: 700;
+            font-family: var(--mono);
+            color: var(--cyan);
+        }
+
+        .nav-metric-lbl {
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Controls */
+        .nav-controls {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            border-left: 1px solid var(--border);
+            padding-left: 20px;
+        }
+
+        .btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: var(--font);
+        }
+
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
         .btn-start {
-            background: var(--accent-green);
-            color: white;
+            background: var(--green-dim);
+            border: 1px solid rgba(0,255,148,0.3);
+            color: var(--green);
         }
-
         .btn-start:hover:not(:disabled) {
-            background: #059669;
-            transform: translateY(-2px);
+            background: rgba(0,255,148,0.2);
+            box-shadow: 0 0 12px rgba(0,255,148,0.2);
         }
 
         .btn-pause {
-            background: var(--accent-yellow);
-            color: white;
+            background: var(--amber-dim);
+            border: 1px solid rgba(255,184,0,0.3);
+            color: var(--amber);
         }
-
         .btn-pause:hover:not(:disabled) {
-            background: #d97706;
-            transform: translateY(-2px);
+            background: rgba(255,184,0,0.2);
+            box-shadow: 0 0 12px rgba(255,184,0,0.2);
         }
 
         .btn-stop {
-            background: var(--accent-red);
-            color: white;
+            background: var(--red-dim);
+            border: 1px solid rgba(255,71,87,0.3);
+            color: var(--red);
         }
-
         .btn-stop:hover:not(:disabled) {
-            background: #dc2626;
-            transform: translateY(-2px);
+            background: rgba(255,71,87,0.2);
+            box-shadow: 0 0 12px rgba(255,71,87,0.2);
         }
 
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .stat-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 20px;
-            transition: transform 0.3s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-4px);
-        }
-
-        .stat-label {
-            font-size: 13px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .stat-change {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .stat-change.positive { color: var(--accent-green); }
-        .stat-change.negative { color: var(--accent-red); }
-
-        /* Main Content Grid */
-        .content-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 24px;
-            margin-bottom: 24px;
-        }
-
-        @media (max-width: 1200px) {
-            .content-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .panel {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 24px;
-        }
-
-        .panel-header {
+        /* ─── Stats strip ───────────────────────────────── */
+        .stats-strip {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border-color);
+            gap: 0;
+            background: var(--bg-1);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .stats-strip::-webkit-scrollbar { display: none; }
+
+        .stat-block {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+            transition: background 0.15s;
+        }
+        .stat-block:hover { background: rgba(0,217,255,0.03); }
+
+        .stat-icon-wrap {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .stat-icon-wrap.blue   { background: rgba(0,217,255,0.1); }
+        .stat-icon-wrap.green  { background: rgba(0,255,148,0.1); }
+        .stat-icon-wrap.amber  { background: rgba(255,184,0,0.1); }
+        .stat-icon-wrap.purple { background: rgba(177,108,255,0.1); }
+        .stat-icon-wrap.red    { background: rgba(255,71,87,0.1); }
+        .stat-icon-wrap.cyan   { background: rgba(0,217,255,0.1); }
+
+        .stat-texts { display: flex; flex-direction: column; gap: 1px; }
+
+        .stat-num {
+            font-size: 18px;
+            font-weight: 700;
+            font-family: var(--mono);
+            line-height: 1;
+        }
+
+        .stat-lbl {
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .stat-block.cyan-accent  .stat-num { color: var(--cyan); }
+        .stat-block.green-accent .stat-num { color: var(--green); }
+        .stat-block.amber-accent .stat-num { color: var(--amber); }
+
+        /* ─── Main grid ──────────────────────────────────── */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 0;
+            flex: 1;
+            min-height: 0;
+        }
+
+        @media (max-width: 1100px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ─── Panel base ─────────────────────────────────── */
+        .panel {
+            border-right: 1px solid var(--border);
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-1);
+            position: sticky;
+            top: 60px;
+            z-index: 10;
         }
 
         .panel-title {
-            font-size: 18px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        /* Token Cards */
-        .token-grid {
-            display: grid;
-            gap: 16px;
-            max-height: 600px;
-            overflow-y: auto;
+        .panel-title .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 6px var(--cyan);
+            animation: blink 2s ease-in-out infinite;
         }
 
-        .token-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 16px;
-            transition: all 0.3s;
+        .count-chip {
+            background: var(--cyan-dim);
+            border: 1px solid rgba(0,217,255,0.2);
+            color: var(--cyan);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-family: var(--mono);
+        }
+
+        /* ─── Token table ────────────────────────────────── */
+        .token-table-wrap {
+            overflow-y: auto;
+            max-height: calc(100vh - 60px - 57px - 49px);
+        }
+
+        .token-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .token-table thead th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-2);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 16px;
+            text-align: left;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            white-space: nowrap;
+            z-index: 5;
+        }
+
+        .token-table tbody tr {
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: background 0.1s;
             cursor: pointer;
         }
 
-        .token-card:hover {
-            border-color: var(--accent-blue);
-            transform: translateX(4px);
+        .token-table tbody tr:hover { background: rgba(0,217,255,0.03); }
+
+        .token-table td {
+            padding: 10px 16px;
+            font-size: 12px;
+            vertical-align: middle;
+            white-space: nowrap;
         }
 
-        .token-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 12px;
-        }
-
-        .token-symbol {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .token-address {
-            font-size: 11px;
-            color: var(--text-secondary);
-            font-family: monospace;
-        }
-
-        .token-score {
-            background: var(--accent-blue);
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
+        .tok-symbol {
             font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .tok-addr {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: var(--mono);
+        }
+
+        .tok-source {
+            font-size: 9px;
+            color: var(--text-dim);
+            margin-top: 1px;
+        }
+
+        .score-chip {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: var(--mono);
+        }
+        .score-chip.high   { background: rgba(0,255,148,0.15); color: var(--green); border: 1px solid rgba(0,255,148,0.25); }
+        .score-chip.medium { background: rgba(255,184,0,0.15);  color: var(--amber); border: 1px solid rgba(255,184,0,0.25); }
+        .score-chip.low    { background: rgba(255,71,87,0.15);   color: var(--red);   border: 1px solid rgba(255,71,87,0.25); }
+
+        .price-val { font-family: var(--mono); font-weight: 600; font-size: 12px; }
+        .chg-pos   { color: var(--green); font-weight: 600; font-family: var(--mono); }
+        .chg-neg   { color: var(--red);   font-weight: 600; font-family: var(--mono); }
+        .num-muted { color: var(--text-muted); font-family: var(--mono); }
+
+        .hot-chip {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            font-family: var(--mono);
+        }
+        .hot-chip.hot  { background: rgba(0,255,148,0.15); color: var(--green); }
+        .hot-chip.warm { background: rgba(255,184,0,0.15);  color: var(--amber); }
+        .hot-chip.cool { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+        .tag-row { display: flex; gap: 4px; flex-wrap: wrap; max-width: 140px; }
+        .tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(0,217,255,0.08); color: #7dd3fc; border: 1px solid rgba(0,217,255,0.15); }
+
+        .badge-row { display: flex; gap: 4px; flex-wrap: wrap; }
+        .vbadge {
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 3px;
             font-weight: 600;
         }
+        .vbadge.pass { background: rgba(0,255,148,0.1); color: var(--green); }
+        .vbadge.fail { background: rgba(255,71,87,0.1);  color: var(--red); }
 
-        .token-score.high { background: var(--accent-green); }
-        .token-score.medium { background: var(--accent-yellow); }
-        .token-score.low { background: var(--accent-red); }
-
-        .token-metrics {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 12px;
+        .ai-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
         }
+        .ai-chip.buy  { background: rgba(0,255,148,0.1); color: var(--green); border: 1px solid rgba(0,255,148,0.2); }
+        .ai-chip.skip { background: rgba(255,71,87,0.1);  color: var(--red);   border: 1px solid rgba(255,71,87,0.2); }
 
-        .metric {
+        /* ─── Side panels ────────────────────────────────── */
+        .side-stack {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            max-height: calc(100vh - 60px - 57px);
         }
 
-        .metric-label {
-            font-size: 11px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
+        .side-panel {
+            border-bottom: 1px solid var(--border);
         }
 
-        .metric-value {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .change-positive { color: var(--accent-green); }
-        .change-negative { color: var(--accent-red); }
-
-        .token-validation {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .validation-badge {
-            font-size: 10px;
-            padding: 4px 8px;
-            border-radius: 12px;
-            background: rgba(59, 130, 246, 0.2);
-            border: 1px solid var(--accent-blue);
-            color: var(--accent-blue);
-        }
-
-        .validation-badge.pass {
-            background: rgba(16, 185, 129, 0.2);
-            border-color: var(--accent-green);
-            color: var(--accent-green);
-        }
-
-        .validation-badge.fail {
-            background: rgba(239, 68, 68, 0.2);
-            border-color: var(--accent-red);
-            color: var(--accent-red);
-        }
-
-        .social-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 8px;
-            padding: 8px;
-            background: rgba(139, 92, 246, 0.1);
-            border-radius: 8px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-        }
-
-        .social-indicator .icon {
-            font-size: 16px;
-        }
-
-        .social-metrics {
-            display: flex;
-            gap: 12px;
-            font-size: 12px;
-        }
-
-        /* AI Decision Card */
-        .ai-decision {
-            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
-            border: 1px solid var(--accent-purple);
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 12px;
-        }
-
-        .ai-decision-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .ai-action {
-            font-weight: 700;
-            font-size: 14px;
-        }
-
-        .ai-action.buy { color: var(--accent-green); }
-        .ai-action.skip { color: var(--accent-red); }
-
-        .ai-confidence {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .ai-reasoning {
-            font-size: 12px;
-            line-height: 1.5;
-            color: var(--text-secondary);
-        }
-
-        /* Portfolio Panel */
-        .portfolio-summary {
-            display: grid;
-            gap: 16px;
-        }
-
-        .portfolio-total {
-            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-        }
-
-        .portfolio-total-label {
-            font-size: 14px;
-            opacity: 0.9;
-            margin-bottom: 8px;
-        }
-
-        .portfolio-total-value {
-            font-size: 36px;
-            font-weight: 700;
-        }
-
-        .portfolio-stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-
-        .portfolio-stat {
-            background: var(--bg-card);
-            padding: 12px;
-            border-radius: 8px;
-        }
-
-        /* Validation Pipeline */
-        .validation-pipeline {
-            display: grid;
-            gap: 12px;
-        }
-
-        .validation-layer {
-            background: var(--bg-card);
+        .side-panel-head {
             padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-1);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .side-panel-body {
+            padding: 16px;
+        }
+
+        /* Portfolio */
+        .portfolio-hero {
+            background: linear-gradient(135deg, rgba(0,217,255,0.08), rgba(177,108,255,0.08));
+            border: 1px solid rgba(0,217,255,0.12);
             border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .portfolio-hero-lbl { font-size: 10px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+        .portfolio-hero-val { font-size: 28px; font-weight: 800; font-family: var(--mono); }
+        .portfolio-pnl { font-size: 12px; margin-top: 4px; font-family: var(--mono); }
+        .portfolio-pnl.pos { color: var(--green); }
+        .portfolio-pnl.neg { color: var(--red); }
+
+        .portfolio-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
         }
+        .portfolio-row:last-child { border-bottom: none; }
+        .portfolio-row-lbl { color: var(--text-muted); font-size: 11px; }
+        .portfolio-row-val { font-family: var(--mono); font-weight: 600; }
 
-        .layer-name {
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .layer-stats {
+        /* Validation pipeline */
+        .vl-row {
             display: flex;
-            gap: 16px;
             align-items: center;
+            gap: 10px;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-size: 11px;
         }
+        .vl-row:last-child { border-bottom: none; }
 
-        .layer-count {
-            font-size: 12px;
-            color: var(--text-secondary);
+        .vl-name { flex: 1; color: var(--text-muted); }
+
+        .vl-bar-wrap {
+            width: 60px;
+            height: 4px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 2px;
+            overflow: hidden;
         }
+        .vl-bar { height: 100%; border-radius: 2px; transition: width 0.5s; }
+        .vl-bar.good   { background: var(--green); }
+        .vl-bar.medium { background: var(--amber); }
+        .vl-bar.poor   { background: var(--red); }
 
-        .layer-rate {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
+        .vl-rate {
+            width: 36px;
+            text-align: right;
+            font-family: var(--mono);
+            font-size: 11px;
             font-weight: 600;
         }
+        .vl-rate.good   { color: var(--green); }
+        .vl-rate.medium { color: var(--amber); }
+        .vl-rate.poor   { color: var(--red); }
 
-        .layer-rate.good {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--accent-green);
-        }
-
-        .layer-rate.medium {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--accent-yellow);
-        }
-
-        .layer-rate.poor {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--accent-red);
-        }
-
-        /* Activity Log */
-        .activity-log {
-            max-height: 400px;
+        /* Activity log */
+        .log-wrap {
+            max-height: 280px;
             overflow-y: auto;
         }
 
-        .log-entry {
-            padding: 12px;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            background: var(--bg-card);
-            border-left: 3px solid var(--accent-blue);
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 12px;
-        }
-
-        .log-entry.info { border-left-color: var(--accent-blue); }
-        .log-entry.success { border-left-color: var(--accent-green); }
-        .log-entry.warning { border-left-color: var(--accent-yellow); }
-        .log-entry.error { border-left-color: var(--accent-red); }
-
-        .log-time {
-            color: var(--text-secondary);
-            margin-right: 8px;
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-primary);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-secondary);
-        }
-
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        /* Utilities */
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
+        .log-line {
+            display: flex;
+            gap: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
             font-size: 11px;
-            font-weight: 600;
+            font-family: var(--mono);
+            align-items: flex-start;
+            line-height: 1.4;
         }
+        .log-line:last-child { border-bottom: none; }
 
-        .badge-success {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--accent-green);
-        }
+        .log-time { color: var(--text-dim); flex-shrink: 0; }
+        .log-msg  { color: var(--text-muted); word-break: break-word; }
 
-        .badge-warning {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--accent-yellow);
-        }
+        .log-line.info    .log-msg { color: #7dd3fc; }
+        .log-line.success .log-msg { color: var(--green); }
+        .log-line.warning .log-msg { color: var(--amber); }
+        .log-line.error   .log-msg { color: var(--red); }
 
-        .badge-danger {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--accent-red);
+        /* ─── Empty states ───────────────────────────────── */
+        .empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
         }
+        .empty-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.3; }
+        .empty-text { font-size: 12px; }
 
-        .badge-info {
-            background: rgba(59, 130, 246, 0.2);
-            color: var(--accent-blue);
-        }
+        /* ─── Scrollbar ──────────────────────────────────── */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,217,255,0.3); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <div class="header-left">
-                <h1>
-                    <span class="status-indicator status-stopped" id="statusIndicator"></span>
-                    Thor
-                </h1>
-                <span id="statusText" style="font-size: 14px; color: var(--text-secondary);">STOPPED</span>
-                <span class="ai-badge" id="aiBadge" style="display: none;">
-                    🤖 AI Active
-                </span>
-            </div>
-            <div class="controls">
-                <button class="btn-start" id="btnStart" onclick="controlBot('start')">
-                    ▶ Start
-                </button>
-                <button class="btn-pause" id="btnPause" onclick="controlBot('pause')" disabled>
-                    ⏸ Pause
-                </button>
-                <button class="btn-stop" id="btnStop" onclick="controlBot('stop')" disabled>
-                    ⏹ Stop
-                </button>
-            </div>
-        </header>
+<div class="app">
 
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Cycle Count</div>
-                <div class="stat-value" id="statCycles">0</div>
-                <div class="stat-change">Discovery rounds</div>
+    <!-- ─── Navbar ────────────────────────────────────── -->
+    <nav class="navbar">
+        <div class="brand">
+            <span class="brand-icon">⚡</span>
+            <span class="brand-name">THOR</span>
+        </div>
+        <div class="brand-divider"></div>
+        <div class="nav-status">
+            <div class="status-dot status-stopped" id="statusIndicator"></div>
+            <span id="statusText">STOPPED</span>
+            <span class="ai-badge" id="aiBadge">🤖 AI</span>
+        </div>
+
+        <div class="nav-metrics">
+            <div class="nav-metric">
+                <span class="nav-metric-val" id="statUptime">00:00:00</span>
+                <span class="nav-metric-lbl">Uptime</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Discovered</div>
-                <div class="stat-value" id="statDiscovered">0</div>
-                <div class="stat-change">Tokens found</div>
+            <div class="nav-metric">
+                <span class="nav-metric-val" id="statSolBalance">0.000</span>
+                <span class="nav-metric-lbl">SOL</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Validated</div>
-                <div class="stat-value" id="statFiltered">0</div>
-                <div class="stat-change">Passed filters</div>
+            <div class="nav-metric">
+                <span class="nav-metric-val" id="portfolioPnL">—</span>
+                <span class="nav-metric-lbl">P&amp;L</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Total Trades</div>
-                <div class="stat-value" id="statTrades">0</div>
-                <div class="stat-change">Executed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Portfolio Value</div>
-                <div class="stat-value" id="portfolioValue">$0</div>
-                <div class="stat-change" id="portfolioPnL">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Uptime</div>
-                <div class="stat-value" id="statUptime">00:00:00</div>
-                <div class="stat-change">Running</div>
+            <div class="nav-metric">
+                <span class="nav-metric-val" id="portfolioValue">$0</span>
+                <span class="nav-metric-lbl">Portfolio</span>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="content-grid">
-            <!-- Token Feed -->
-            <div class="panel">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        📊 Live Token Feed
-                        <span class="badge badge-info" id="tokenCount">0 tokens</span>
-                    </div>
-                </div>
-                <div class="token-grid" id="tokenGrid">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🔍</div>
-                        <div>No tokens discovered yet</div>
-                        <div style="font-size: 12px; margin-top: 8px;">Click START to begin scanning</div>
-                    </div>
-                </div>
+        <div class="nav-controls">
+            <button class="btn btn-start" id="btnStart" onclick="controlBot('start')">▶ START</button>
+            <button class="btn btn-pause" id="btnPause" onclick="controlBot('pause')" disabled>⏸ PAUSE</button>
+            <button class="btn btn-stop"  id="btnStop"  onclick="controlBot('stop')"  disabled>⏹ STOP</button>
+        </div>
+    </nav>
+
+    <!-- ─── Stats strip ──────────────────────────────── -->
+    <div class="stats-strip">
+        <div class="stat-block cyan-accent">
+            <div class="stat-icon-wrap blue">🔄</div>
+            <div class="stat-texts">
+                <span class="stat-num" id="statCycles">0</span>
+                <span class="stat-lbl">Cycles</span>
             </div>
-
-            <!-- Side Panel -->
-            <div style="display: grid; gap: 24px;">
-                <!-- Portfolio -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">💼 Portfolio</div>
-                    </div>
-                    <div class="portfolio-summary" id="portfolioPanel">
-                        <div class="empty-state">
-                            <div>No active positions</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Validation Pipeline -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">🔒 Validation Pipeline</div>
-                    </div>
-                    <div class="validation-pipeline" id="validationPipeline">
-                        <div class="empty-state">
-                            <div>No validation data</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Activity Log -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title">📝 Activity Log</div>
-                    </div>
-                    <div class="activity-log" id="activityLog">
-                        <div class="empty-state">
-                            <div>No activity yet</div>
-                        </div>
-                    </div>
-                </div>
+        </div>
+        <div class="stat-block cyan-accent">
+            <div class="stat-icon-wrap cyan">🔍</div>
+            <div class="stat-texts">
+                <span class="stat-num" id="statDiscovered">0</span>
+                <span class="stat-lbl">Discovered</span>
+            </div>
+        </div>
+        <div class="stat-block green-accent">
+            <div class="stat-icon-wrap green">✅</div>
+            <div class="stat-texts">
+                <span class="stat-num" id="statFiltered">0</span>
+                <span class="stat-lbl">Validated</span>
+            </div>
+        </div>
+        <div class="stat-block amber-accent">
+            <div class="stat-icon-wrap amber">⚡</div>
+            <div class="stat-texts">
+                <span class="stat-num" id="statTrades">0</span>
+                <span class="stat-lbl">Trades</span>
             </div>
         </div>
     </div>
 
-    <script>
-        let updateInterval;
+    <!-- ─── Main grid ─────────────────────────────────── -->
+    <div class="main-grid">
 
-        // Control bot
-        async function controlBot(action) {
-            try {
-                const response = await fetch('/api/control', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action })
-                });
-                const data = await response.json();
-                console.log(data.message);
-                updateDashboard();
-            } catch (error) {
-                console.error('Control error:', error);
-            }
-        }
+        <!-- Token feed -->
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">
+                    <span class="dot"></span>
+                    Live Token Feed
+                </div>
+                <span class="count-chip" id="tokenCount">0 tokens</span>
+            </div>
+            <div class="token-table-wrap">
+                <table class="token-table" id="tokenTable">
+                    <thead>
+                        <tr>
+                            <th>TOKEN</th>
+                            <th>SCORE</th>
+                            <th>PRICE</th>
+                            <th>24H %</th>
+                            <th>VOLUME</th>
+                            <th>LIQUIDITY</th>
+                            <th>MKTCAP</th>
+                            <th>HOT</th>
+                            <th>TAGS</th>
+                            <th>AI</th>
+                            <th>CHECKS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tokenGrid">
+                        <tr>
+                            <td colspan="11">
+                                <div class="empty">
+                                    <div class="empty-icon">🔍</div>
+                                    <div class="empty-text">No tokens yet — click START to begin scanning</div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        // Update dashboard
-        async function updateDashboard() {
-            try {
-                // Get all data in one request
-                const response = await fetch('/api/dashboard');
-                const data = await response.json();
+        <!-- Side stack -->
+        <div class="side-stack">
 
-                // Update status
-                updateStatus(data.status);
-
-                // Update stats
-                updateStats(data.status, data.portfolio);
-
-                // Update tokens
-                updateTokens(await (await fetch('/api/tokens')).json());
-
-                // Update validation
-                updateValidation(data.validation);
-
-                // Update portfolio
-                updatePortfolio(data.portfolio);
-
-                // Update logs
-                updateLogs(data.logs);
-
-            } catch (error) {
-                console.error('Update error:', error);
-            }
-        }
-
-        function updateStatus(status) {
-            const indicator = document.getElementById('statusIndicator');
-            const statusText = document.getElementById('statusText');
-            const btnStart = document.getElementById('btnStart');
-            const btnPause = document.getElementById('btnPause');
-            const btnStop = document.getElementById('btnStop');
-            const aiBadge = document.getElementById('aiBadge');
-
-            // Update indicator
-            indicator.className = 'status-indicator status-' + status.status;
-
-            // Update text
-            statusText.textContent = status.status.toUpperCase();
-
-            // Update buttons
-            if (status.status === 'running') {
-                btnStart.disabled = true;
-                btnPause.disabled = false;
-                btnStop.disabled = false;
-            } else if (status.status === 'paused') {
-                btnStart.disabled = true;
-                btnPause.disabled = false;
-                btnStop.disabled = false;
-            } else {
-                btnStart.disabled = false;
-                btnPause.disabled = true;
-                btnStop.disabled = true;
-            }
-
-            // Show AI badge if active
-            if (status.ai_active) {
-                aiBadge.style.display = 'inline-flex';
-            }
-        }
-
-        function updateStats(status, portfolio) {
-            document.getElementById('statCycles').textContent = status.cycle_count || 0;
-            document.getElementById('statDiscovered').textContent = status.total_discovered || 0;
-            document.getElementById('statFiltered').textContent = status.total_filtered || 0;
-            document.getElementById('statTrades').textContent = status.total_trades || 0;
-
-            // Portfolio value
-            const value = portfolio?.total_value || 0;
-            const pnl = portfolio?.unrealized_pnl || 0;
-            const pnlPct = portfolio?.unrealized_pnl_pct || 0;
-
-            document.getElementById('portfolioValue').textContent = '$' + value.toFixed(2);
-
-            const pnlEl = document.getElementById('portfolioPnL');
-            if (pnl > 0) {
-                pnlEl.textContent = '+$' + pnl.toFixed(2) + ' (+' + pnlPct.toFixed(2) + '%)';
-                pnlEl.className = 'stat-change positive';
-            } else if (pnl < 0) {
-                pnlEl.textContent = '-$' + Math.abs(pnl).toFixed(2) + ' (' + pnlPct.toFixed(2) + '%)';
-                pnlEl.className = 'stat-change negative';
-            } else {
-                pnlEl.textContent = '-';
-                pnlEl.className = 'stat-change';
-            }
-
-            // Uptime
-            const uptime = status.uptime || 0;
-            const hours = Math.floor(uptime / 3600);
-            const minutes = Math.floor((uptime % 3600) / 60);
-            const seconds = Math.floor(uptime % 60);
-            document.getElementById('statUptime').textContent =
-                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }
-
-        function updateTokens(tokens) {
-            const grid = document.getElementById('tokenGrid');
-            const count = document.getElementById('tokenCount');
-
-            count.textContent = tokens.length + ' tokens';
-
-            if (tokens.length === 0) {
-                grid.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🔍</div>
-                        <div>No tokens discovered yet</div>
-                    </div>
-                `;
-                return;
-            }
-
-            grid.innerHTML = tokens.map(token => {
-                const scoreClass = token.score >= 0.7 ? 'high' : token.score >= 0.4 ? 'medium' : 'low';
-                const changeClass = token.change >= 0 ? 'change-positive' : 'change-negative';
-
-                let validationBadges = '';
-                if (token.contract_safe !== null) {
-                    validationBadges += `<span class="validation-badge ${token.contract_safe ? 'pass' : 'fail'}">🔒 Contract</span>`;
-                }
-                if (token.momentum_score > 0) {
-                    validationBadges += `<span class="validation-badge pass">📈 Momentum ${(token.momentum_score * 100).toFixed(0)}%</span>`;
-                }
-                if (token.social_score > 0) {
-                    validationBadges += `<span class="validation-badge pass">🐦 Social ${(token.social_score * 100).toFixed(0)}%</span>`;
-                }
-
-                let socialIndicator = '';
-                if (token.social_mentions > 0) {
-                    const sentiment = token.social_sentiment > 0.5 ? '😊' : token.social_sentiment > 0 ? '😐' : '😞';
-                    socialIndicator = `
-                        <div class="social-indicator">
-                            <span class="icon">${sentiment}</span>
-                            <div class="social-metrics">
-                                <span>${token.social_mentions} mentions</span>
-                                <span>Sentiment: ${(token.social_sentiment * 100).toFixed(0)}%</span>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                let aiDecision = '';
-                if (token.ai_decision) {
-                    const actionClass = token.ai_decision.toLowerCase();
-                    aiDecision = `
-                        <div class="ai-decision">
-                            <div class="ai-decision-header">
-                                <span class="ai-action ${actionClass}">🤖 ${token.ai_decision}</span>
-                                <span class="ai-confidence">${token.ai_confidence}% confident</span>
-                            </div>
-                            ${token.ai_reasoning ? `<div class="ai-reasoning">${token.ai_reasoning}</div>` : ''}
-                        </div>
-                    `;
-                }
-
-                return `
-                    <div class="token-card">
-                        <div class="token-header">
-                            <div>
-                                <div class="token-symbol">${token.symbol}</div>
-                                <div class="token-address">${token.address}</div>
-                            </div>
-                            <div class="token-score ${scoreClass}">${token.score_display}</div>
-                        </div>
-                        <div class="token-metrics">
-                            <div class="metric">
-                                <div class="metric-label">Price</div>
-                                <div class="metric-value">${token.price_display}</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">24h Change</div>
-                                <div class="metric-value ${changeClass}">${token.change_display}</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">Volume</div>
-                                <div class="metric-value">${token.volume_display}</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">Liquidity</div>
-                                <div class="metric-value">${token.liquidity_display}</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">Market Cap</div>
-                                <div class="metric-value">${token.market_cap_display}</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">Holders</div>
-                                <div class="metric-value">${token.holders}</div>
-                            </div>
-                        </div>
-                        ${socialIndicator}
-                        <div class="token-validation">${validationBadges}</div>
-                        ${aiDecision}
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function updateValidation(validation) {
-            const pipeline = document.getElementById('validationPipeline');
-
-            if (!validation || !validation.rejection_breakdown) {
-                return;
-            }
-
-            const layers = [
-                { name: '1. Contract Safety', key: 'contract_unsafe' },
-                { name: '2. Momentum', key: 'momentum_low' },
-                { name: '3. Launch Timing', key: 'timing_poor' },
-                { name: '4. Social Sentiment', key: 'social_low' },
-                { name: '5. Bonding Curve', key: 'curve_unhealthy' },
-                { name: '6. Liquidity', key: 'liquidity_low' },
-                { name: '7. Holder Distribution', key: 'holders_concentrated' },
-                { name: '8. Risk Management', key: 'risk_exceeded' },
-                { name: '9. AI Agent', key: 'ai_rejected' }
-            ];
-
-            const total = validation.total_evaluated || 1;
-
-            pipeline.innerHTML = layers.map(layer => {
-                const rejected = validation.rejection_breakdown[layer.key] || 0;
-                const passed = total - rejected;
-                const rate = (passed / total * 100).toFixed(1);
-                const rateClass = rate >= 80 ? 'good' : rate >= 50 ? 'medium' : 'poor';
-
-                return `
-                    <div class="validation-layer">
-                        <span class="layer-name">${layer.name}</span>
-                        <div class="layer-stats">
-                            <span class="layer-count">${passed}/${total}</span>
-                            <span class="layer-rate ${rateClass}">${rate}%</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function updatePortfolio(portfolio) {
-            const panel = document.getElementById('portfolioPanel');
-
-            if (!portfolio || !portfolio.positions || portfolio.positions.length === 0) {
-                panel.innerHTML = '<div class="empty-state"><div>No active positions</div></div>';
-                return;
-            }
-
-            const pnl = portfolio.unrealized_pnl || 0;
-            const pnlPct = portfolio.unrealized_pnl_pct || 0;
-            const pnlClass = pnl >= 0 ? 'positive' : 'negative';
-
-            panel.innerHTML = `
-                <div class="portfolio-total">
-                    <div class="portfolio-total-label">Total Value</div>
-                    <div class="portfolio-total-value">$${(portfolio.total_value || 0).toFixed(2)}</div>
-                    <div class="stat-change ${pnlClass}">
-                        ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)
+            <!-- Portfolio -->
+            <div class="side-panel">
+                <div class="side-panel-head">💼 Portfolio</div>
+                <div class="side-panel-body" id="portfolioPanel">
+                    <div class="empty">
+                        <div class="empty-icon">💼</div>
+                        <div class="empty-text">No positions</div>
                     </div>
                 </div>
-                <div class="portfolio-stats">
-                    <div class="portfolio-stat">
-                        <div class="metric-label">Cash</div>
-                        <div class="metric-value">$${(portfolio.cash_balance || 0).toFixed(2)}</div>
-                    </div>
-                    <div class="portfolio-stat">
-                        <div class="metric-label">Positions</div>
-                        <div class="metric-value">${portfolio.positions.length}</div>
+            </div>
+
+            <!-- Validation pipeline -->
+            <div class="side-panel">
+                <div class="side-panel-head">🔒 Validation Pipeline</div>
+                <div class="side-panel-body">
+                    <div id="validationPipeline">
+                        <div class="empty">
+                            <div class="empty-text">No data yet</div>
+                        </div>
                     </div>
                 </div>
-            `;
+            </div>
+
+            <!-- Activity log -->
+            <div class="side-panel">
+                <div class="side-panel-head">📟 Activity Log</div>
+                <div class="side-panel-body" style="padding: 8px 12px;">
+                    <div class="log-wrap" id="activityLog">
+                        <div class="empty">
+                            <div class="empty-text">Waiting for activity…</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    let updateInterval;
+
+    async function controlBot(action) {
+        try {
+            const r = await fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            });
+            await r.json();
+            updateDashboard();
+        } catch (e) { console.error('Control error:', e); }
+    }
+
+    async function updateDashboard() {
+        try {
+            const [dashRes, tokRes] = await Promise.all([
+                fetch('/api/dashboard'),
+                fetch('/api/tokens')
+            ]);
+            const data   = await dashRes.json();
+            const tokens = await tokRes.json();
+
+            updateStatus(data.status);
+            updateStats(data.status, data.portfolio);
+            updateTokens(tokens);
+            updateValidation(data.validation);
+            updatePortfolio(data.portfolio);
+            updateLogs(data.logs);
+        } catch (e) { console.error('Update error:', e); }
+    }
+
+    function updateStatus(status) {
+        const dot  = document.getElementById('statusIndicator');
+        const txt  = document.getElementById('statusText');
+        const bS   = document.getElementById('btnStart');
+        const bP   = document.getElementById('btnPause');
+        const bSt  = document.getElementById('btnStop');
+        const ai   = document.getElementById('aiBadge');
+
+        dot.className = 'status-dot ' + status.status;
+        txt.textContent = status.status.toUpperCase();
+
+        if (status.status === 'running' || status.status === 'paused') {
+            bS.disabled  = true;
+            bP.disabled  = false;
+            bSt.disabled = false;
+        } else {
+            bS.disabled  = false;
+            bP.disabled  = true;
+            bSt.disabled = true;
         }
 
-        function updateLogs(logs) {
-            const logEl = document.getElementById('activityLog');
+        ai.style.display = status.ai_active ? 'inline' : 'none';
+    }
 
-            if (!logs || logs.length === 0) {
-                logEl.innerHTML = '<div class="empty-state"><div>No activity yet</div></div>';
-                return;
+    function fmtNum(n) {
+        if (n >= 1e6)  return '$' + (n / 1e6).toFixed(2) + 'M';
+        if (n >= 1e3)  return '$' + (n / 1e3).toFixed(1) + 'K';
+        return '$' + n.toFixed(0);
+    }
+
+    function updateStats(status, portfolio) {
+        document.getElementById('statCycles').textContent    = status.cycle_count    || 0;
+        document.getElementById('statDiscovered').textContent = status.total_discovered || 0;
+        document.getElementById('statFiltered').textContent  = status.total_filtered  || 0;
+        document.getElementById('statTrades').textContent    = status.total_trades    || 0;
+        document.getElementById('statSolBalance').textContent = (status.sol_balance || 0).toFixed(3) + ' SOL';
+
+        const val    = portfolio?.total_value    || 0;
+        const pnl    = portfolio?.unrealized_pnl || 0;
+        const pnlPct = portfolio?.unrealized_pnl_pct || 0;
+
+        document.getElementById('portfolioValue').textContent = '$' + val.toFixed(2);
+
+        const pEl = document.getElementById('portfolioPnL');
+        if (pnl > 0) {
+            pEl.textContent = '+$' + pnl.toFixed(2);
+            pEl.style.color = 'var(--green)';
+        } else if (pnl < 0) {
+            pEl.textContent = '-$' + Math.abs(pnl).toFixed(2);
+            pEl.style.color = 'var(--red)';
+        } else {
+            pEl.textContent = '—';
+            pEl.style.color = '';
+        }
+
+        const uptime = status.uptime || 0;
+        const h = Math.floor(uptime / 3600);
+        const m = Math.floor((uptime % 3600) / 60);
+        const s = Math.floor(uptime % 60);
+        document.getElementById('statUptime').textContent =
+            `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function updateTokens(tokens) {
+        const tbody = document.getElementById('tokenGrid');
+        const count = document.getElementById('tokenCount');
+        count.textContent = tokens.length + ' tokens';
+
+        if (!tokens.length) {
+            tbody.innerHTML = `<tr><td colspan="11"><div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No tokens yet</div></div></td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = tokens.map(t => {
+            const scoreClass = t.score >= 0.7 ? 'high' : t.score >= 0.4 ? 'medium' : 'low';
+            const chgClass   = t.change >= 0  ? 'chg-pos' : 'chg-neg';
+
+            // Hot badge
+            let hotHtml = '—';
+            if (t.dex_hotness_score !== null && t.dex_hotness_score !== undefined) {
+                const cls = t.dex_hotness_score >= 70 ? 'hot' : t.dex_hotness_score >= 50 ? 'warm' : 'cool';
+                hotHtml = `<span class="hot-chip ${cls}">🔥 ${t.dex_hotness_score.toFixed(0)}</span>`;
             }
 
-            logEl.innerHTML = logs.slice().reverse().map(log => `
-                <div class="log-entry ${log.level.toLowerCase()}">
-                    <span class="log-time">${log.timestamp}</span>
-                    <span>${log.message}</span>
-                </div>
-            `).join('');
+            // Breakout
+            let breakoutExtra = '';
+            if (t.breakout_readiness !== null && t.breakout_readiness !== undefined) {
+                breakoutExtra = `<br><span style="font-size:9px;color:var(--text-muted)">🚀 ${(t.breakout_readiness*100).toFixed(0)}%</span>`;
+            }
+
+            // Tags
+            const tags = (t.dex_tags || []).slice(0,3).map(tag =>
+                `<span class="tag">${tag.replace(/_/g,' ')}</span>`
+            ).join('');
+            const tagsHtml = tags ? `<div class="tag-row">${tags}</div>` : '—';
+
+            // AI chip
+            let aiHtml = '—';
+            if (t.ai_decision) {
+                aiHtml = `<span class="ai-chip ${t.ai_decision.toLowerCase()}">🤖 ${t.ai_decision} <small>${t.ai_confidence}%</small></span>`;
+            }
+
+            // Validation badges
+            const badges = [];
+            if (t.contract_safe !== null) {
+                badges.push(`<span class="vbadge ${t.contract_safe ? 'pass' : 'fail'}">${t.contract_safe ? '🔒✓' : '🔒✗'}</span>`);
+            }
+            if (t.momentum_score > 0) badges.push(`<span class="vbadge pass">📈</span>`);
+            if (t.social_score   > 0) badges.push(`<span class="vbadge pass">🐦</span>`);
+            const badgesHtml = badges.length ? `<div class="badge-row">${badges.join('')}</div>` : '—';
+
+            // Source
+            const src = t.discovery_source && t.discovery_source !== 'unknown'
+                ? t.discovery_source.replace('dex_hot_scanner','🔥dex').replace(/_/g,' ')
+                : '';
+
+            return `<tr>
+                <td>
+                    <div class="tok-symbol">${t.symbol}</div>
+                    <div class="tok-addr">${t.address}</div>
+                    ${src ? `<div class="tok-source">${src}</div>` : ''}
+                </td>
+                <td><span class="score-chip ${scoreClass}">${t.score_display}</span></td>
+                <td><span class="price-val">${t.price_display}</span></td>
+                <td><span class="${chgClass}">${t.change_display}</span></td>
+                <td><span class="num-muted">${fmtNum(t.volume)}</span></td>
+                <td><span class="num-muted">${fmtNum(t.liquidity)}</span></td>
+                <td><span class="num-muted">${fmtNum(t.market_cap)}</span></td>
+                <td>${hotHtml}${breakoutExtra}</td>
+                <td>${tagsHtml}</td>
+                <td>${aiHtml}</td>
+                <td>${badgesHtml}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function updateValidation(validation) {
+        const el = document.getElementById('validationPipeline');
+        if (!validation || !validation.rejection_breakdown) return;
+
+        const layers = [
+            { name: 'Contract Safety',    key: 'contract_unsafe' },
+            { name: 'Momentum',           key: 'momentum_low' },
+            { name: 'Launch Timing',      key: 'timing_poor' },
+            { name: 'Social Sentiment',   key: 'social_low' },
+            { name: 'Bonding Curve',      key: 'curve_unhealthy' },
+            { name: 'Liquidity',          key: 'liquidity_low' },
+            { name: 'Holder Distribution',key: 'holders_concentrated' },
+            { name: 'Risk Management',    key: 'risk_exceeded' },
+            { name: 'AI Agent',           key: 'ai_rejected' },
+        ];
+
+        const total = validation.total_evaluated || 1;
+
+        el.innerHTML = layers.map(l => {
+            const rejected = validation.rejection_breakdown[l.key] || 0;
+            const passed   = total - rejected;
+            const rate     = (passed / total * 100);
+            const cls      = rate >= 80 ? 'good' : rate >= 50 ? 'medium' : 'poor';
+            return `<div class="vl-row">
+                <span class="vl-name">${l.name}</span>
+                <div class="vl-bar-wrap"><div class="vl-bar ${cls}" style="width:${rate}%"></div></div>
+                <span class="vl-rate ${cls}">${rate.toFixed(0)}%</span>
+            </div>`;
+        }).join('');
+    }
+
+    function updatePortfolio(portfolio) {
+        const el = document.getElementById('portfolioPanel');
+        if (!portfolio || !portfolio.positions || !portfolio.positions.length) {
+            el.innerHTML = '<div class="empty"><div class="empty-icon">💼</div><div class="empty-text">No active positions</div></div>';
+            return;
         }
 
-        // Start updates
-        updateDashboard();
-        updateInterval = setInterval(updateDashboard, 1000);
-    </script>
+        const pnl    = portfolio.unrealized_pnl     || 0;
+        const pnlPct = portfolio.unrealized_pnl_pct || 0;
+        const pnlCls = pnl >= 0 ? 'pos' : 'neg';
+
+        const posRows = portfolio.positions.map(p => `
+            <div class="portfolio-row">
+                <span class="portfolio-row-lbl">${p.symbol || 'N/A'}</span>
+                <span class="portfolio-row-val">$${(p.value || 0).toFixed(2)}</span>
+            </div>
+        `).join('');
+
+        el.innerHTML = `
+            <div class="portfolio-hero">
+                <div class="portfolio-hero-lbl">Total Value</div>
+                <div class="portfolio-hero-val">$${(portfolio.total_value || 0).toFixed(2)}</div>
+                <div class="portfolio-pnl ${pnlCls}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</div>
+            </div>
+            <div class="portfolio-row">
+                <span class="portfolio-row-lbl">Cash</span>
+                <span class="portfolio-row-val">$${(portfolio.cash_balance || 0).toFixed(2)}</span>
+            </div>
+            <div class="portfolio-row">
+                <span class="portfolio-row-lbl">Positions</span>
+                <span class="portfolio-row-val">${portfolio.positions.length}</span>
+            </div>
+            ${posRows}
+        `;
+    }
+
+    function updateLogs(logs) {
+        const el = document.getElementById('activityLog');
+        if (!logs || !logs.length) {
+            el.innerHTML = '<div class="empty"><div class="empty-text">Waiting for activity…</div></div>';
+            return;
+        }
+        el.innerHTML = logs.slice().reverse().map(log => `
+            <div class="log-line ${log.level.toLowerCase()}">
+                <span class="log-time">${log.timestamp}</span>
+                <span class="log-msg">${log.message}</span>
+            </div>
+        `).join('');
+    }
+
+    updateDashboard();
+    updateInterval = setInterval(updateDashboard, 1000);
+</script>
 </body>
 </html>

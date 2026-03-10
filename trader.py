@@ -2,6 +2,7 @@
 import logging
 import time
 import asyncio
+import threading
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -63,6 +64,17 @@ class Trader:
         else:
             logger.info("📋 Rule-based mode - AI Agent disabled (set USE_AI_AGENT=true to enable)")
 
+        # Telegram notifications (optional — disabled if TELEGRAM_BOT_TOKEN not set)
+        from api_clients.telegram_notifier import TelegramNotifier
+        self.notifier = TelegramNotifier()
+
+        # Dedicated async event loop — avoids asyncio.run() conflicts with Flask/threads
+        self._loop = asyncio.new_event_loop()
+        self._loop_thread = threading.Thread(
+            target=self._loop.run_forever, daemon=True, name="trader-async"
+        )
+        self._loop_thread.start()
+
         # Trading statistics
         self.total_trades = 0
         self.successful_trades = 0
@@ -87,6 +99,32 @@ class Trader:
         if self.use_ai_agent:
             logger.info("🤖 AI Agent: ACTIVE")
         logger.warning(f"Wallet: {TradingConfig.WALLET_ADDRESS}")
+
+    def _run_async(self, coro, timeout: int = 30):
+        """Run a coroutine on the dedicated event loop and block until done."""
+        fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return fut.result(timeout=timeout)
+
+    def _is_migration_fast_path(self, token_info: dict) -> bool:
+        """Migrations skip volume/social/timing/dump checks — they're brand-new."""
+        return (
+            token_info.get('is_migration') is True
+            and token_info.get('migration_signal') == 'high'
+        )
+
+    def calculate_dynamic_slippage(self, liquidity_usd: float, position_size_usd: float) -> float:
+        """Scale slippage based on position size relative to pool liquidity."""
+        if liquidity_usd <= 0:
+            return TradingConfig.DEFAULT_SLIPPAGE
+        ratio = position_size_usd / liquidity_usd
+        if ratio < 0.005:
+            return 0.01
+        elif ratio < 0.02:
+            return 0.02
+        elif ratio < 0.05:
+            return 0.035
+        else:
+            return TradingConfig.MAX_SLIPPAGE
 
     def execute_trade(
         self,
@@ -149,23 +187,32 @@ class Trader:
     ) -> bool:
         """Execute LIVE buy order via Solana"""
         try:
+            is_fast = self._is_migration_fast_path(token_info)
+            if is_fast:
+                logger.info(
+                    f"⚡ FAST PATH: {symbol} is a migration — "
+                    "skipping volume/social/timing/dump checks"
+                )
+
             # ✅ VALIDATION 1: Price must be valid
             if price <= 0 or price is None:
                 logger.error(f"❌ REJECTED - Invalid price ${price} for {symbol}")
                 self.validation_stats['price_rejected'] += 1
                 return False
 
-            # ✅ VALIDATION 2: Minimum volume requirement
+            # ✅ VALIDATION 2: Volume — informational only for new pairs
             volume = token_info.get('daily_volume_usd', 0)
-            if volume < 50000:  # Minimum $50k volume
-                logger.warning(f"❌ REJECTED - {symbol} volume too low: ${volume:,.0f} < $50,000")
-                self.validation_stats['volume_rejected'] += 1
-                return False
+            if volume > 0:
+                logger.debug(f"📊 {symbol} volume: ${volume:,.0f}")
 
             # ✅ VALIDATION 3: Liquidity check
             liquidity = token_info.get('liquidity_usd', 0)
-            if liquidity > 0 and liquidity < 10000:
-                logger.warning(f"❌ REJECTED - {symbol} liquidity too low: ${liquidity:,.0f} < $10,000")
+            min_liq = 5_000 if is_fast else 10_000
+            if liquidity > 0 and liquidity < min_liq:
+                logger.warning(
+                    f"❌ REJECTED - {symbol} liquidity too low: "
+                    f"${liquidity:,.0f} < ${min_liq:,}"
+                )
                 self.validation_stats['liquidity_rejected'] += 1
                 return False
 
@@ -188,68 +235,112 @@ class Trader:
             logger.info(f"✅ {symbol} contract safe - {safety_result.holder_count} holders, "
                        f"top 10: {safety_result.top_holders_percent:.1f}%")
 
-            # 📊 VALIDATION 5: Buy/Sell Pressure & Momentum
-            logger.info(f"📊 Analyzing momentum for {symbol}...")
-            momentum = self.momentum_analyzer.analyze_momentum(token_address)
+            # 📊 VALIDATION 5: Buy/Sell Pressure & Momentum (skipped for migrations)
+            if not is_fast:
+                logger.info(f"📊 Analyzing momentum for {symbol}...")
+                momentum = self.momentum_analyzer.analyze_momentum(token_address)
 
-            if momentum['dump_detected']:
-                logger.error(f"❌ REJECTED - {symbol} DUMP DETECTED: "
-                           f"{momentum['consecutive_sells']} consecutive sells")
-                self.validation_stats['dump_detected'] += 1
-                return False
+                if momentum['dump_detected']:
+                    logger.error(
+                        f"❌ REJECTED - {symbol} DUMP DETECTED: "
+                        f"{momentum['consecutive_sells']} consecutive sells"
+                    )
+                    self.validation_stats['dump_detected'] += 1
+                    return False
 
-            if momentum['buy_sell_ratio'] < 0.5:
-                logger.warning(f"❌ REJECTED - {symbol} more selling than buying "
-                             f"(ratio: {momentum['buy_sell_ratio']:.2f})")
-                self.validation_stats['dump_detected'] += 1
-                return False
+                if momentum['buy_sell_ratio'] < 0.5:
+                    logger.warning(
+                        f"❌ REJECTED - {symbol} more selling than buying "
+                        f"(ratio: {momentum['buy_sell_ratio']:.2f})"
+                    )
+                    self.validation_stats['dump_detected'] += 1
+                    return False
 
-            if momentum['fomo_detected']:
-                logger.info(f"🔥 FOMO DETECTED for {symbol}! "
-                          f"{momentum['consecutive_buys']} consecutive buys")
+                if momentum['fomo_detected']:
+                    logger.info(
+                        f"🔥 FOMO DETECTED for {symbol}! "
+                        f"{momentum['consecutive_buys']} consecutive buys"
+                    )
 
-            logger.info(f"✅ {symbol} momentum: {momentum['momentum_direction']} "
-                       f"(score: {momentum['momentum_score']:.2f}, "
-                       f"ratio: {momentum['buy_sell_ratio']:.1f}x)")
+                logger.info(
+                    f"✅ {symbol} momentum: {momentum['momentum_direction']} "
+                    f"(score: {momentum['momentum_score']:.2f}, "
+                    f"ratio: {momentum['buy_sell_ratio']:.1f}x)"
+                )
 
-            # ⏰ VALIDATION 6: Launch Timing
-            logger.info(f"⏰ Checking timing for {symbol}...")
-            timing = self.timing_analyzer.analyze_timing(token_info)
+            # ⏰ VALIDATION 6: Launch Timing (skipped for migrations)
+            if not is_fast:
+                logger.info(f"⏰ Checking timing for {symbol}...")
+                timing = self.timing_analyzer.analyze_timing(token_info)
 
-            should_wait, wait_reason = self.timing_analyzer.should_wait_for_better_timing(token_info)
-            if should_wait:
-                logger.warning(f"❌ REJECTED - {symbol} bad timing: {wait_reason}")
-                self.validation_stats['bad_timing'] += 1
-                return False
+                should_wait, wait_reason = self.timing_analyzer.should_wait_for_better_timing(token_info)
+                if should_wait:
+                    logger.warning(f"❌ REJECTED - {symbol} bad timing: {wait_reason}")
+                    self.validation_stats['bad_timing'] += 1
+                    return False
 
-            if timing['in_golden_window']:
-                logger.info(f"🎯 {symbol} IN GOLDEN WINDOW! ({timing['pool_age_minutes']:.1f}m old)")
+                if timing['in_golden_window']:
+                    logger.info(
+                        f"🎯 {symbol} IN GOLDEN WINDOW! "
+                        f"({timing['pool_age_minutes']:.1f}m old)"
+                    )
 
-            logger.info(f"✅ {symbol} timing: {timing['timing_rating']} "
-                       f"(score: {timing['timing_score']:.2f})")
-            for reason in timing['reasons'][:2]:  # Show top 2 reasons
-                logger.info(f"   {reason}")
+                logger.info(
+                    f"✅ {symbol} timing: {timing['timing_rating']} "
+                    f"(score: {timing['timing_score']:.2f})"
+                )
+                for reason in timing['reasons'][:2]:
+                    logger.info(f"   {reason}")
 
-            # 📱 VALIDATION 7: Social Sentiment
-            logger.info(f"📱 Analyzing social sentiment for {symbol}...")
-            social = self.social_analyzer.analyze_social_sentiment(
-                token_address, symbol, token_info
-            )
+            # 📱 VALIDATION 7: Social Sentiment (skipped for migrations)
+            if not is_fast:
+                logger.info(f"📱 Analyzing social sentiment for {symbol}...")
+                social = self.social_analyzer.analyze_social_sentiment(
+                    token_address, symbol, token_info
+                )
 
-            should_skip_social, social_reason = self.social_analyzer.should_skip_due_to_social(social)
-            if should_skip_social:
-                logger.error(f"❌ REJECTED - {symbol} social sentiment: {social_reason}")
-                self.validation_stats['negative_social'] += 1
-                return False
+                should_skip_social, social_reason = self.social_analyzer.should_skip_due_to_social(social)
+                if should_skip_social:
+                    logger.error(
+                        f"❌ REJECTED - {symbol} social sentiment: {social_reason}"
+                    )
+                    self.validation_stats['negative_social'] += 1
+                    return False
 
-            logger.info(f"✅ {symbol} social: {social.sentiment_rating} "
-                       f"(score: {social.social_score:.2f})")
-            if social.strengths:
-                for strength in social.strengths[:2]:  # Top 2 strengths
-                    logger.info(f"   {strength}")
-            if social.warnings:
-                for warning in social.warnings[:2]:  # Top 2 warnings
-                    logger.info(f"   {warning}")
+                logger.info(
+                    f"✅ {symbol} social: {social.sentiment_rating} "
+                    f"(score: {social.social_score:.2f})"
+                )
+                if social.strengths:
+                    for strength in social.strengths[:2]:
+                        logger.info(f"   {strength}")
+                if social.warnings:
+                    for warning in social.warnings[:2]:
+                        logger.info(f"   {warning}")
+
+            # 🐦 VALIDATION 7.5: Metadata URI → Twitter (skipped for migrations)
+            metadata_uri = token_info.get('metadata_uri')
+            if metadata_uri and not is_fast:
+                from api_clients.social_analyzer import (
+                    fetch_token_metadata, validate_twitter_account
+                )
+                import os as _os
+                meta = fetch_token_metadata(metadata_uri)
+                twitter_url = (meta.get('twitter') or token_info.get('twitter', ''))
+                if twitter_url:
+                    tw_valid, tw_reason = validate_twitter_account(
+                        twitter_url,
+                        followers_min=int(_os.getenv('TWITTER_FOLLOWERS_MIN', '50')),
+                        tweets_min=int(_os.getenv('TWITTER_TWEETS_MIN', '10')),
+                        ratio_max=float(_os.getenv('TWITTER_RATIO_MAX', '0.5')),
+                    )
+                    if not tw_valid:
+                        logger.error(
+                            f"❌ REJECTED - {symbol} Twitter: {tw_reason}"
+                        )
+                        self.validation_stats['negative_social'] += 1
+                        return False
+                    logger.info(f"✅ {symbol} Twitter: {tw_reason}")
 
             # 🎯 VALIDATION 8: Bonding Curve (for Pump.fun tokens)
             logger.info(f"🎯 Checking bonding curve for {symbol}...")
@@ -328,7 +419,7 @@ class Trader:
                 # Market context
                 market_context = {
                     'sentiment': 'NEUTRAL',  # TODO: Add market sentiment tracker
-                    'sol_price': asyncio.run(self.solana_client.get_sol_price_usd()),
+                    'sol_price': self._run_async(self.solana_client.get_sol_price_usd()),
                     'volatility': 'MEDIUM'  # TODO: Calculate volatility
                 }
 
@@ -388,14 +479,14 @@ class Trader:
                     logger.warning("Continuing with trade (AI agent failed)")
 
             # Check wallet balance before proceeding
-            sol_balance = asyncio.run(self.solana_client.get_sol_balance())
+            sol_balance = self._run_async(self.solana_client.get_sol_balance())
             if sol_balance < 0.01:
                 logger.error(f"❌ TRADE BLOCKED: Insufficient SOL balance ({sol_balance:.4f} SOL)")
                 self.failed_trades += 1
                 return False
 
             # Convert USD to SOL using live price
-            sol_price = asyncio.run(self.solana_client.get_sol_price_usd())
+            sol_price = self._run_async(self.solana_client.get_sol_price_usd())
             sol_amount = position_size_usd / sol_price
 
             # Verify we have enough SOL (keep 5% buffer for fees)
@@ -409,17 +500,25 @@ class Trader:
             logger.info(
                 f"🚀 Executing LIVE BUY: {symbol}"
             )
+            dyn_slippage = self.calculate_dynamic_slippage(
+                token_info.get('liquidity_usd', 0), position_size_usd
+            )
             logger.info(f"   Amount: {sol_amount:.4f} SOL (~${position_size_usd:.2f} @ ${sol_price:.2f}/SOL)")
             logger.info(f"   Balance: {sol_balance:.4f} SOL available")
             logger.info(f"   Token: {token_address}")
-            logger.info(f"   Slippage: {TradingConfig.DEFAULT_SLIPPAGE * 100:.1f}%")
+            logger.info(
+                f"   Slippage: {dyn_slippage * 100:.1f}% "
+                f"(dynamic, liq=${token_info.get('liquidity_usd', 0):,.0f})"
+            )
 
             # Execute swap on Solana using Jupiter
-            tx_signature = asyncio.run(
+            tx_signature = self._run_async(
                 self.solana_client.swap_sol_for_token(
                     token_address=token_address,
                     amount_sol=sol_amount,
-                    slippage=TradingConfig.DEFAULT_SLIPPAGE
+                    slippage=self.calculate_dynamic_slippage(
+                        token_info.get('liquidity_usd', 0), position_size_usd
+                    )
                 )
             )
 
@@ -427,14 +526,19 @@ class Trader:
                 logger.info(f"✅ BUY ORDER FILLED: {symbol}")
                 logger.info(f"   Transaction: {tx_signature}")
 
-                # Add position to risk manager
-                # Note: We don't know exact quantity yet - need to query blockchain
+                qty = position_size_usd / price
                 self.risk_manager.add_position(
-                    token_address, symbol, position_size_usd / price, price
+                    token_address, symbol, qty, price, entry_tx=tx_signature
                 )
-
-                # Record in storage
+                self.storage.save_position(
+                    token_address, symbol, qty, price,
+                    entry_tx=tx_signature, cost_usd=position_size_usd
+                )
                 self.storage.save_order_status(tx_signature, "filled")
+                self.notifier.notify_buy(
+                    symbol, token_address, price, position_size_usd,
+                    token_info.get('discovery_source', 'unknown')
+                )
 
                 self.successful_trades += 1
                 self.total_trades += 1
@@ -474,11 +578,13 @@ class Trader:
             logger.info(f"   Current price: ${price:.6f}")
 
             # Execute swap on Solana using Jupiter
-            tx_signature = asyncio.run(
+            tx_signature = self._run_async(
                 self.solana_client.swap_token_for_sol(
                     token_address=token_address,
                     amount_tokens=quantity,
-                    slippage=TradingConfig.DEFAULT_SLIPPAGE
+                    slippage=self.calculate_dynamic_slippage(
+                        position.cost_basis, position.cost_basis
+                    )
                 )
             )
 
@@ -492,8 +598,10 @@ class Trader:
                 logger.info(f"   Transaction: {tx_signature}")
                 logger.info(f"   P&L: ${realized_pnl:.2f} ({(realized_pnl / (quantity * position.entry_price) * 100):+.1f}%)")
 
-                # Record in storage
                 self.storage.save_order_status(tx_signature, "filled")
+                self.storage.delete_position(token_address)
+                pnl_pct = realized_pnl / (quantity * position.entry_price) * 100
+                self.notifier.notify_sell(symbol, realized_pnl, pnl_pct, reason)
 
                 self.successful_trades += 1
                 self.total_trades += 1
@@ -507,6 +615,55 @@ class Trader:
         except Exception as e:
             logger.error(f"Error in live sell execution for {symbol}: {str(e)}")
             self.failed_trades += 1
+            return False
+
+    def _execute_partial_sell(
+        self,
+        token_address: str,
+        fraction: float,
+        price: float,
+        reason: str = "partial",
+    ) -> bool:
+        """Sell a fraction of an open position (e.g. 0.5 = sell half)."""
+        try:
+            position = self.risk_manager.positions.get(token_address)
+            if not position:
+                return False
+
+            sell_qty = position.quantity * fraction
+            symbol = position.symbol
+
+            logger.info(
+                f"🔻 Partial sell {symbol}: {fraction:.0%} @ ${price:.6f} — {reason}"
+            )
+
+            tx_signature = self._run_async(
+                self.solana_client.swap_token_for_sol(
+                    token_address=token_address,
+                    amount_tokens=sell_qty,
+                    slippage=self.calculate_dynamic_slippage(
+                        position.cost_basis, position.cost_basis * fraction
+                    )
+                )
+            )
+
+            if tx_signature:
+                realized_pnl = (price - position.entry_price) * sell_qty
+                position.quantity -= sell_qty
+                self.storage.update_position(token_address, quantity=position.quantity)
+                self.storage.save_order_status(tx_signature, "partial_sell")
+                logger.info(
+                    f"✅ Partial sell filled: {symbol} "
+                    f"P&L=${realized_pnl:.2f} remaining={position.quantity:.4f}"
+                )
+                if hasattr(self, 'notifier'):
+                    pnl_pct = (price - position.entry_price) / position.entry_price * 100
+                    self.notifier.notify_sell(symbol, realized_pnl, pnl_pct, reason)
+                return True
+            return False
+
+        except Exception as e:
+            logger.error(f"Partial sell error: {e}")
             return False
 
     def update_all_positions(self, price_updates: Dict[str, float]) -> None:
@@ -596,7 +753,7 @@ class Trader:
         """Check trader health status"""
         try:
             # Get SOL balance
-            sol_balance = asyncio.run(self.solana_client.get_sol_balance())
+            sol_balance = self._run_async(self.solana_client.get_sol_balance())
 
             return {
                 "overall_healthy": True,

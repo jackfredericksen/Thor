@@ -3,6 +3,7 @@
 import time
 import json
 import logging
+import threading
 from datetime import datetime
 from typing import List, Dict, Any
 from rich.live import Live
@@ -56,7 +57,165 @@ class TradingBot:
         self.latest_filtered_tokens = []
         self.trade_history = []
 
+        # Restore persisted open positions from DB into RiskManager
+        self._restore_positions()
+
+        # Start background position monitor
+        self._running = True
+        self._start_position_monitor()
+
         logger.info("Trading bot initialized successfully")
+
+    def _restore_positions(self):
+        """Load persisted positions from SQLite into RiskManager on startup."""
+        try:
+            rows = self.storage.load_positions()
+            for row in rows:
+                from risk_management import Position
+                pos = Position(
+                    symbol=row["symbol"],
+                    quantity=row["quantity"],
+                    entry_price=row["entry_price"],
+                    current_price=row["current_price"],
+                    peak_price=row["peak_price"],
+                    partial_sold=row["partial_sold"],
+                    entry_tx=row["entry_tx"],
+                )
+                self.trader.risk_manager.positions[row["token_address"]] = pos
+            if rows:
+                logger.info(f"Restored {len(rows)} open position(s) from database")
+        except Exception as exc:
+            logger.warning(f"Could not restore positions: {exc}")
+
+    def _start_position_monitor(self):
+        """Start the background thread that monitors open positions."""
+        self._pos_thread = threading.Thread(
+            target=self._position_monitor_loop,
+            daemon=True,
+            name="position-monitor",
+        )
+        self._pos_thread.start()
+        logger.info("Position monitor started (10s interval)")
+
+    def _position_monitor_loop(self):
+        """Background loop: check open positions for TP/SL triggers every 10s."""
+        while self._running:
+            try:
+                self._check_all_positions()
+            except Exception as exc:
+                logger.error(f"Position monitor error: {exc}")
+            time.sleep(10)
+
+    def _get_current_price(self, token_address: str) -> float:
+        """Fetch current token price from DexScreener."""
+        try:
+            import requests as _req
+            url = (
+                f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
+            )
+            resp = _req.get(url, timeout=5)
+            if resp.status_code == 200:
+                pairs = resp.json().get("pairs") or []
+                # Pick highest-liquidity Solana pair
+                sol_pairs = [p for p in pairs if p.get("chainId") == "solana"]
+                if sol_pairs:
+                    best = max(
+                        sol_pairs,
+                        key=lambda p: float((p.get("liquidity") or {}).get("usd", 0))
+                    )
+                    return float(best.get("priceUsd", 0) or 0)
+        except Exception:
+            pass
+        return 0.0
+
+    def _check_all_positions(self):
+        """Check every open position for TP/trailing-stop/SL triggers."""
+        from config import TradingConfig
+        positions = self.trader.risk_manager.positions
+        if not positions:
+            return
+
+        for token_address, position in list(positions.items()):
+            price = self._get_current_price(token_address)
+            if not price:
+                continue
+
+            position.current_price = price
+            if price > position.peak_price:
+                position.peak_price = price
+                self.storage.update_position(
+                    token_address, current_price=price, peak_price=price
+                )
+            else:
+                self.storage.update_position(token_address, current_price=price)
+
+            profit_pct = (price - position.entry_price) / position.entry_price
+
+            # TP1: sell 50% at 2x
+            if (
+                profit_pct >= TradingConfig.TP1_MULTIPLIER - 1
+                and not (position.partial_sold & 1)
+            ):
+                logger.info(
+                    f"🎯 TP1 triggered for {position.symbol} "
+                    f"(+{profit_pct:.0%})"
+                )
+                self.trader._execute_partial_sell(
+                    token_address, 0.5, price, reason="TP1 2x"
+                )
+                position.partial_sold |= 1
+                self.storage.update_position(
+                    token_address, partial_sold=position.partial_sold
+                )
+
+            # TP2: sell 50% of remainder (25% original) at 5x
+            elif (
+                profit_pct >= TradingConfig.TP2_MULTIPLIER - 1
+                and not (position.partial_sold & 2)
+            ):
+                logger.info(
+                    f"🎯 TP2 triggered for {position.symbol} "
+                    f"(+{profit_pct:.0%})"
+                )
+                self.trader._execute_partial_sell(
+                    token_address, 0.5, price, reason="TP2 5x"
+                )
+                position.partial_sold |= 2
+                self.storage.update_position(
+                    token_address, partial_sold=position.partial_sold
+                )
+
+            # Trailing stop (active once profit >= activation threshold)
+            elif profit_pct >= TradingConfig.TRAILING_STOP_ACTIVATION:
+                trail_trigger = position.peak_price * (
+                    1 - TradingConfig.TRAILING_STOP_DISTANCE
+                )
+                if price <= trail_trigger:
+                    logger.info(
+                        f"📉 Trailing stop for {position.symbol}: "
+                        f"${price:.6f} <= trigger ${trail_trigger:.6f}"
+                    )
+                    self.trader._execute_sell(
+                        token_address,
+                        position.symbol,
+                        price,
+                        reason=f"Trailing stop (peak=${position.peak_price:.4f})",
+                    )
+
+            # Hard stop-loss
+            elif self.trader.risk_manager.should_stop_loss(
+                price, position.entry_price
+            ):
+                logger.info(
+                    f"🛑 Stop-loss for {position.symbol}: "
+                    f"-{(1-price/position.entry_price):.0%}"
+                )
+                self.trader._execute_sell(
+                    token_address,
+                    position.symbol,
+                    price,
+                    reason="Stop-loss 15%",
+                )
 
     def discover_and_filter_tokens(self) -> List[Dict[str, Any]]:
         """Comprehensive token discovery and filtering"""
@@ -358,6 +517,7 @@ class TradingBot:
             self.print_session_stats()
             raise
         finally:
+            self._running = False
             keyboard_handler.stop()
 
 def main():

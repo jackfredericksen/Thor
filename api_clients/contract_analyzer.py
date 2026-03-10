@@ -13,6 +13,9 @@ from typing import Dict, List, Optional, Tuple
 from contextlib import contextmanager
 from dataclasses import dataclass
 import base64
+
+from api_clients.rugcheck import RugcheckClient
+from api_clients.creator_blacklist import get_creator_blacklist
 import json
 
 logger = logging.getLogger(__name__)
@@ -37,6 +40,7 @@ class ContractAnalyzer:
     def __init__(self, helius_api_key: Optional[str] = None):
         self.helius_api_key = helius_api_key
         self.rugcheck_base_url = "https://api.rugcheck.xyz/v1"
+        self.rugcheck_client = RugcheckClient()
 
         # Solana RPC endpoints (fallback chain)
         self.rpc_endpoints = [
@@ -84,11 +88,31 @@ class ContractAnalyzer:
             warnings = []
             risk_level = "SAFE"
 
+            # Step 1.5: Creator blacklist check
+            creator = mint_info.get('mintAuthority') or mint_info.get('updateAuthority')
+            if creator:
+                bl, bl_reason = get_creator_blacklist().is_blacklisted(creator)
+                if bl:
+                    return ContractSafetyResult(
+                        is_safe=False,
+                        risk_level="CRITICAL",
+                        reasons=[f"🚫 CREATOR BLACKLISTED: {bl_reason}"],
+                        warnings=[],
+                        mint_authority=creator,
+                        freeze_authority=None,
+                        top_holders_percent=0,
+                        holder_count=0,
+                    )
+
             # Step 2: Check mint authority (CRITICAL)
             mint_authority = mint_info.get('mintAuthority')
             if mint_authority:
                 reasons.append("⚠️ MINT AUTHORITY NOT RENOUNCED - Can print unlimited tokens")
                 risk_level = "CRITICAL"
+                get_creator_blacklist().auto_add_rugger(
+                    mint_authority, token_address,
+                    "Mint authority not renounced"
+                )
             else:
                 logger.debug(f"✅ {token_address[:8]}: Mint authority renounced")
 
@@ -98,6 +122,10 @@ class ContractAnalyzer:
                 reasons.append("⚠️ FREEZE AUTHORITY NOT RENOUNCED - Can freeze wallets")
                 if risk_level != "CRITICAL":
                     risk_level = "HIGH"
+                get_creator_blacklist().auto_add_rugger(
+                    freeze_authority, token_address,
+                    "Freeze authority not renounced"
+                )
             else:
                 logger.debug(f"✅ {token_address[:8]}: Freeze authority renounced")
 
@@ -120,14 +148,27 @@ class ContractAnalyzer:
                 if risk_level == "SAFE":
                     risk_level = "MEDIUM"
 
-            # Step 5: RugCheck API (if available)
-            rugcheck_data = self._check_rugcheck(token_address)
-            if rugcheck_data and rugcheck_data.get('risks'):
-                for risk in rugcheck_data['risks']:
-                    warnings.append(f"RugCheck: {risk['name']} - {risk['description']}")
-                    if risk['level'] == 'danger':
-                        if risk_level in ["SAFE", "LOW", "MEDIUM"]:
-                            risk_level = "HIGH"
+            # Step 5: RugCheck API
+            audit = self.rugcheck_client.audit_token(token_address)
+            if audit.status == "success":
+                if audit.is_rugged:
+                    reasons.append("🚨 RUGGED — RugCheck confirmed rug pull")
+                    risk_level = "CRITICAL"
+                if audit.has_danger:
+                    for r in audit.risks:
+                        if r.get("level") == "danger":
+                            reasons.append(
+                                f"RugCheck DANGER: {r.get('name','')} — "
+                                f"{r.get('description','')}"
+                            )
+                    if risk_level in ("SAFE", "LOW", "MEDIUM"):
+                        risk_level = "HIGH"
+                else:
+                    for r in audit.risks:
+                        warnings.append(
+                            f"RugCheck {r.get('level','info')}: "
+                            f"{r.get('name','')} — {r.get('description','')}"
+                        )
 
             # Final determination
             is_safe = risk_level in ["SAFE", "LOW"]
@@ -302,28 +343,33 @@ class ContractAnalyzer:
 
     def check_honeypot(self, token_address: str) -> Tuple[bool, str]:
         """
-        Check if token is a honeypot (can buy but can't sell)
+        Check if token is a honeypot (can buy but can't sell).
 
-        This is a simplified check - full implementation would simulate a swap
+        Uses RugCheck.xyz risk flags as primary signal.
         """
         try:
-            # Check via RugCheck API
-            rugcheck_data = self._check_rugcheck(token_address)
+            audit = self.rugcheck_client.audit_token(token_address)
+            if audit.status != "success":
+                return False, "RugCheck unavailable — honeypot check skipped"
 
-            if rugcheck_data:
-                risks = rugcheck_data.get('risks', [])
-                for risk in risks:
-                    if 'honeypot' in risk.get('name', '').lower():
-                        return True, f"RugCheck detected honeypot: {risk['description']}"
-                    if 'cannot sell' in risk.get('description', '').lower():
-                        return True, "Cannot sell tokens detected"
+            for risk in audit.risks:
+                name = risk.get("name", "").lower()
+                desc = risk.get("description", "").lower()
+                if "honeypot" in name or "cannot sell" in desc or "unsellable" in desc:
+                    return (
+                        True,
+                        f"RugCheck: {risk.get('name','')} — "
+                        f"{risk.get('description','')}",
+                    )
 
-            # If no RugCheck data or no honeypot detected
-            return False, "No honeypot detected"
+            if audit.is_rugged:
+                return True, "Token is rugged (RugCheck confirmed)"
 
-        except Exception as e:
-            logger.error(f"Error checking honeypot: {e}")
-            return False, f"Honeypot check failed: {e}"
+            return False, "No honeypot signals detected"
+
+        except Exception as exc:
+            logger.error(f"Honeypot check error: {exc}")
+            return False, f"Honeypot check failed: {exc}"
 
 
 def quick_safety_check(token_address: str, helius_api_key: Optional[str] = None) -> Tuple[bool, str, Dict]:

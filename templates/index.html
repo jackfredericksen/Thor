@@ -291,6 +291,25 @@
                     <div class="stat-value" id="portfolioSuccessRate">0%</div>
                 </div>
             </div>
+
+            <h3 style="margin: 24px 0 12px;">Open Positions</h3>
+            <table id="positionsTable">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Entry</th>
+                        <th>Current</th>
+                        <th>Peak</th>
+                        <th>P&L $</th>
+                        <th>P&L %</th>
+                        <th>Cost</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="positionsBody">
+                    <tr><td colspan="8" class="empty-state">No open positions.</td></tr>
+                </tbody>
+            </table>
         </div>
 
         <div class="tab-content" id="tabTrades">
@@ -494,13 +513,54 @@
                         ((portfolio.success_rate || 0) * 100).toFixed(1) + '%';
                 }
 
+                // Update open positions table
+                const posResp = await fetch('/api/positions');
+                const positions = await posResp.json();
+                const posBody = document.getElementById('positionsBody');
+                if (positions.length === 0) {
+                    posBody.innerHTML = '<tr><td colspan="8" class="empty-state">No open positions.</td></tr>';
+                } else {
+                    posBody.innerHTML = positions.map(p => {
+                        const pnlColor = p.pnl_usd >= 0 ? '#4caf50' : '#f44336';
+                        const pnlSign = p.pnl_usd >= 0 ? '+' : '';
+                        return `<tr>
+                            <td><strong>${p.symbol}</strong></td>
+                            <td>$${p.entry_price.toFixed(6)}</td>
+                            <td>$${p.current_price.toFixed(6)}</td>
+                            <td>$${p.peak_price.toFixed(6)}</td>
+                            <td style="color:${pnlColor}">${pnlSign}$${p.pnl_usd.toFixed(2)}</td>
+                            <td style="color:${pnlColor}">${pnlSign}${p.pnl_pct.toFixed(1)}%</td>
+                            <td>$${p.cost_usd.toFixed(2)}</td>
+                            <td><button onclick="closePosition('${p.address}','${p.symbol}')"
+                                style="background:#f44336;color:#fff;border:none;padding:4px 8px;
+                                       border-radius:4px;cursor:pointer;">Close</button></td>
+                        </tr>`;
+                    }).join('');
+                }
+
             } catch (error) {
                 console.error('Update error:', error);
             }
         }
 
-        // Update every second
-        setInterval(updateData, 1000);
+        async function closePosition(address, symbol) {
+            if (!confirm(`Close position ${symbol}?`)) return;
+            try {
+                const r = await fetch(`/api/positions/${address}/close`, {method: 'POST'});
+                const data = await r.json();
+                if (data.success) {
+                    alert(`Position ${symbol} closed successfully`);
+                    updateData();
+                } else {
+                    alert(`Failed to close: ${data.error || 'unknown error'}`);
+                }
+            } catch(e) {
+                alert('Error closing position: ' + e);
+            }
+        }
+
+        // Update every 5 seconds (positions panel) — portfolio is slow to change
+        setInterval(updateData, 5000);
         updateData();
     </script>
 </body>

@@ -123,6 +123,13 @@ class SocialAnalyzer:
             warnings = []
             strengths = []
 
+            # Blend in on-chain signals (done after strengths list is created)
+            if token_data:
+                onchain = self.analyze_onchain_social(token_data)
+                if onchain['score'] > 0:
+                    social_score = min(1.0, social_score * 0.6 + onchain['score'] * 0.4)
+                    strengths.extend([f"⛓️ {r}" for r in onchain['reasons'][:2]])
+
             # Twitter analysis
             if twitter_metrics['mentions_1h'] == 0:
                 warnings.append("⚠️ No recent Twitter mentions")
@@ -560,6 +567,234 @@ class SocialAnalyzer:
 
         except Exception:
             return False, "Social data unavailable - proceeding"
+
+
+    def analyze_onchain_social(self, token_info: Dict) -> Dict:
+        """
+        Derive social signal quality from on-chain and DexScreener data
+        instead of fragile nitter.net scraping.
+
+        Uses:
+        - buys_1h / sells_1h  — buy pressure from DexScreener txns.h1
+        - curve_progress       — bonding curve fill % (pump.fun tokens)
+        - top_holder_30k_count — whale interest (from migration enrichment)
+        - creator_score        — creator track record
+
+        Returns dict: {score: float 0-1, reasons: List[str], passed: bool}
+        """
+        score = 0.0
+        reasons = []
+
+        # Buy/sell pressure from DexScreener h1 transaction counts
+        buys = float(token_info.get('buys_1h', 0))
+        sells = float(token_info.get('sells_1h', 0))
+        total_txns = buys + sells
+        if total_txns > 0:
+            ratio = buys / total_txns
+            if ratio > 0.65:
+                score += 0.3
+                reasons.append(f"Strong buy pressure {ratio:.0%}")
+            elif ratio > 0.50:
+                score += 0.15
+                reasons.append(f"Buy pressure {ratio:.0%}")
+
+        # Bonding curve fill progress (pump.fun)
+        progress = float(token_info.get('curve_progress', 0))
+        if progress > 75:
+            score += 0.25
+            reasons.append(f"BC {progress:.0f}% full (nearly graduated)")
+        elif progress > 40:
+            score += 0.15
+            reasons.append(f"BC {progress:.0f}% full")
+
+        # Whale interest from migration enrichment
+        top_30k = int(token_info.get('top_holder_30k_count', 0))
+        if top_30k >= 3:
+            score += 0.25
+            reasons.append(f"{top_30k} whale wallets (>$30k)")
+        elif top_30k >= 1:
+            score += 0.1
+            reasons.append(f"{top_30k} whale wallet")
+
+        # Creator track record
+        creator_score = float(token_info.get('creator_score', 0))
+        if creator_score > 100:
+            score += 0.2
+            reasons.append(f"Proven creator (score={creator_score:.0f})")
+        elif creator_score > 30:
+            score += 0.1
+
+        # Migration signal (already passed bonding curve = strong signal)
+        if token_info.get('is_migration') and token_info.get('migration_signal') == 'high':
+            score += 0.3
+            reasons.append("Graduated bonding curve (migration)")
+
+        return {
+            'score': min(score, 1.0),
+            'reasons': reasons,
+            'passed': score >= 0.15,  # Low bar — on-chain signals are sparse for new tokens
+        }
+
+
+# ---------------------------------------------------------------------------
+# Metadata URI fetching + Twitter account validation
+# ---------------------------------------------------------------------------
+
+def fetch_token_metadata(metadata_uri: str) -> Dict:
+    """
+    Fetch and parse a pump.fun token metadata JSON from IPFS/Arweave.
+
+    Returns dict with keys: name, symbol, description, twitter,
+    telegram, website, image.  All values default to "" if absent.
+    """
+    if not metadata_uri:
+        return {}
+
+    try:
+        # Resolve IPFS URIs via public gateway
+        url = metadata_uri
+        if url.startswith("ipfs://"):
+            url = "https://ipfs.io/ipfs/" + url[7:]
+
+        with requests.Session() as session:
+            session.headers["User-Agent"] = "Thor-TradingBot/1.0"
+            resp = session.get(url, timeout=8)
+            if resp.status_code != 200:
+                return {}
+            data = resp.json()
+
+        # Normalise: some metadata stores socials at top level,
+        # others inside a "links" sub-object.
+        links = data.get("links") or data.get("extensions") or {}
+        return {
+            "name":        data.get("name", ""),
+            "symbol":      data.get("symbol", ""),
+            "description": data.get("description", ""),
+            "image":       data.get("image", ""),
+            "twitter":     data.get("twitter", links.get("twitter", "")),
+            "telegram":    data.get("telegram", links.get("telegram", "")),
+            "website":     data.get("website", links.get("website", "")),
+        }
+    except Exception as exc:
+        logger.debug(f"fetch_token_metadata error for {metadata_uri[:40]}: {exc}")
+        return {}
+
+
+def validate_twitter_account(
+    twitter_url: str,
+    followers_min: int = 50,
+    tweets_min: int = 10,
+    ratio_max: float = 0.5,
+) -> Tuple[bool, str]:
+    """
+    Validate a Twitter/X account from pump.fun token metadata.
+
+    Returns (valid: bool, reason: str).
+
+    Checks (using nitter.net scraping — no API key needed):
+    - Minimum follower count
+    - Minimum tweet count
+    - following / followers ratio (high ratio = likely bought followers)
+
+    Falls back to passing (True) if the account data cannot be fetched,
+    to avoid blocking tokens because of a network hiccup.
+    """
+    if not twitter_url:
+        return False, "No Twitter URL provided"
+
+    # Normalise: accept @handle, twitter.com/handle, x.com/handle
+    handle = twitter_url.strip()
+    for prefix in ("https://x.com/", "https://twitter.com/",
+                   "http://x.com/", "http://twitter.com/",
+                   "x.com/", "twitter.com/", "@"):
+        if handle.startswith(prefix):
+            handle = handle[len(prefix):]
+            break
+    handle = handle.split("/")[0].split("?")[0].strip()
+
+    if not handle:
+        return False, "Could not parse Twitter handle"
+
+    # Try nitter.net (free Twitter front-end)
+    nitter_hosts = [
+        "https://nitter.net",
+        "https://nitter.privacydev.net",
+        "https://nitter.poast.org",
+    ]
+    for host in nitter_hosts:
+        try:
+            import re as _re
+            with requests.Session() as s:
+                s.headers["User-Agent"] = (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                )
+                resp = s.get(f"{host}/{handle}", timeout=6)
+                if resp.status_code != 200:
+                    continue
+                html = resp.text
+
+                # Parse follower / following / tweet counts from nitter HTML
+                # Nitter renders: <span class="followers-count">1.2k</span>
+                def _parse_count(pattern):
+                    m = _re.search(pattern, html)
+                    if not m:
+                        return 0
+                    raw = m.group(1).replace(",", "")
+                    if raw.endswith("k"):
+                        return int(float(raw[:-1]) * 1000)
+                    if raw.endswith("M"):
+                        return int(float(raw[:-1]) * 1_000_000)
+                    try:
+                        return int(raw)
+                    except ValueError:
+                        return 0
+
+                followers = _parse_count(
+                    r'class="followers[^"]*"[^>]*>\s*<span[^>]*>([\d.,kM]+)'
+                )
+                following = _parse_count(
+                    r'class="following[^"]*"[^>]*>\s*<span[^>]*>([\d.,kM]+)'
+                )
+                tweets = _parse_count(
+                    r'class="tweets[^"]*"[^>]*>\s*<span[^>]*>([\d.,kM]+)'
+                )
+
+                # If we couldn't parse any values, move to next host
+                if followers == 0 and tweets == 0:
+                    continue
+
+                if followers < followers_min:
+                    return (
+                        False,
+                        f"@{handle} has {followers} followers "
+                        f"(min {followers_min})",
+                    )
+                if tweets < tweets_min:
+                    return (
+                        False,
+                        f"@{handle} has {tweets} tweets (min {tweets_min})",
+                    )
+                if following > 0 and followers > 0:
+                    ratio = following / followers
+                    if ratio > ratio_max:
+                        return (
+                            False,
+                            f"@{handle} following/followers ratio "
+                            f"{ratio:.2f} > {ratio_max}",
+                        )
+
+                return (
+                    True,
+                    f"@{handle} OK — {followers} followers, {tweets} tweets",
+                )
+
+        except Exception as exc:
+            logger.debug(f"Nitter check failed ({host}): {exc}")
+            continue
+
+    # Could not validate — default pass to avoid false rejections
+    logger.debug(f"Twitter validation skipped for @{handle} (nitter unavailable)")
+    return True, f"@{handle} — validation skipped (nitter unavailable)"
 
 
 # Quick helper function for simple checks

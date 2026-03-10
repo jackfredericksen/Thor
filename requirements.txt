@@ -21,8 +21,15 @@ solana>=0.30.0
 solders>=0.18.0
 base58>=2.1.1
 
-# WebSocket support
-websockets>=11.0.0
+# WebSocket support (pumpfun_ws, migration_monitor, meteora_scanner)
+websockets>=12.0
+
+# Phase 2 optional - gRPC wallet monitoring
+# grpcio>=1.60.0
+# grpcio-tools>=1.60.0
+
+# Phase 3 optional - IDL-based instruction decoding
+# anchorpy>=0.20.0
 
 # Utilities
 tenacity>=8.2.0

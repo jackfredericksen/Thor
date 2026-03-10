@@ -54,8 +54,8 @@ class FilterConfig:
     OPTIMAL_AGE_HOURS = 72  # 3 days is optimal for memecoins
     FRESH_AGE_HOURS = 6  # Very fresh tokens (highest priority)
 
-    # Volume filters (USD) - MUCH MORE SELECTIVE
-    MIN_VOLUME_USD = 50_000  # Minimum $50k daily volume (was 500)
+    # Volume filters (USD) — removed hard floor to allow brand-new pairs
+    MIN_VOLUME_USD = 0  # No minimum volume (new pairs start at $0)
     GOOD_VOLUME_USD = 100_000  # Good volume threshold (was 10k)
     HIGH_VOLUME_USD = 500_000  # High volume threshold (was 100k)
     MAX_VOLUME_USD = 50_000_000  # Avoid overly hyped tokens
@@ -125,6 +125,16 @@ class TradingConfig:
     MAX_CONCURRENT_POSITIONS = 50  # Maximum open positions
     PORTFOLIO_ALLOCATION_PERCENT = 0.02  # 2% of portfolio per trade
 
+    # Multi-level take-profit + trailing stop
+    TP1_MULTIPLIER = float(os.getenv("THOR_TP1_MULTIPLIER", "2.0"))    # Sell 50% at 2x entry
+    TP2_MULTIPLIER = float(os.getenv("THOR_TP2_MULTIPLIER", "5.0"))    # Sell 25% at 5x entry
+    TRAILING_STOP_ACTIVATION = float(os.getenv("THOR_TRAIL_ACTIVATE", "0.50"))  # Activate at +50%
+    TRAILING_STOP_DISTANCE = float(os.getenv("THOR_TRAIL_DISTANCE", "0.20"))    # Trail 20% below peak
+
+    # Telegram notifications
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
 
 # Discovery configuration
 class DiscoveryConfig:
@@ -171,6 +181,25 @@ class DiscoveryConfig:
 
     # Data freshness
     MAX_DATA_AGE_MINUTES = 30  # Ignore data older than 30 minutes
+
+
+# PumpFun / WebSocket integration
+PUMPPORTAL_WSS_URL = "wss://pumpportal.fun/api/data"
+PUMPFUN_PROGRAM_ID = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
+
+# Helius WSS — required for migration detection (optional)
+HELIUS_WSS_URL = os.getenv("HELIUS_WSS_URL", "")
+
+# parser-proxy-ws sidecar event stream (optional)
+EVENT_PROXY_URL = os.getenv("EVENT_PROXY_URL", "")
+
+# Yellowstone gRPC — real-time wallet tracking (optional)
+YELLOWSTONE_URL = os.getenv("YELLOWSTONE_GRPC_URL", "")
+
+# Twitter/social thresholds for metadata validation
+TWITTER_FOLLOWERS_MIN = int(os.getenv("TWITTER_FOLLOWERS_MIN", "50"))
+TWITTER_TWEETS_MIN = int(os.getenv("TWITTER_TWEETS_MIN", "10"))
+TWITTER_RATIO_MAX = float(os.getenv("TWITTER_RATIO_MAX", "0.5"))
 
 
 # DexScreener HotScanner configuration

@@ -13,6 +13,76 @@ from contextlib import contextmanager
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Real-time WebSocket-based sources (higher priority than REST sources)
+# ---------------------------------------------------------------------------
+
+class PumpFunSource:
+    """
+    Drains the PumpFunWebSocketClient deque for brand-new pump.fun launches.
+    Priority 15 — above DexHotScanner (10).
+    """
+
+    def __init__(self):
+        from api_clients.pumpfun import PumpFunWebSocketClient
+        self._client = PumpFunWebSocketClient()
+        self._client.start()
+
+    def fetch(self) -> List[Dict[str, Any]]:
+        return self._client.get_pending_tokens()
+
+
+class MigrationDiscoverySource:
+    """
+    Drains the MigrationMonitor deque for pump.fun → PumpSwap graduations.
+    Priority 20 — highest of all sources.
+    Tokens are immediately flagged is_migration=True for fast-track processing.
+    """
+
+    def __init__(self):
+        from api_clients.migration_monitor import get_migration_monitor
+        self._monitor = get_migration_monitor()
+
+    def fetch(self) -> List[Dict[str, Any]]:
+        return self._monitor.get_pending_migrations()
+
+
+class MeteoraScannerSource:
+    """
+    Drains the MeteoraScanner deque for new Meteora DLMM/DBC pools.
+    Priority 18 — between pumpfun_ws (15) and migration_monitor (20).
+    Disabled gracefully when HELIUS_WSS_URL is not set.
+    """
+
+    def __init__(self):
+        from api_clients.meteora_scanner import get_meteora_scanner
+        self._scanner = get_meteora_scanner()
+
+    def fetch(self) -> List[Dict[str, Any]]:
+        try:
+            return self._scanner.get_pending_pools()
+        except Exception:
+            return []
+
+
+class EventProxySource:
+    """
+    Drains the EventProxyClient deque for sub-ms pool creation events.
+    Priority 25 — highest.
+    Disabled gracefully when EVENT_PROXY_URL is not set.
+    """
+
+    def __init__(self):
+        from api_clients.event_proxy_client import get_event_proxy_client
+        self._client = get_event_proxy_client()
+
+    def fetch(self) -> List[Dict[str, Any]]:
+        try:
+            return self._client.get_pending_events()
+        except Exception:
+            return []
+
+
 class DexHotScannerSource:
     """
     High-quality token discovery via DexScreener HotScanner.
@@ -178,7 +248,7 @@ class TokenDiscovery:
         self.jupiter_cache_time = None
         self.jupiter_cache_ttl = 1800  # 30 minutes
 
-        # DexScreener HotScanner (primary source)
+        # DexScreener HotScanner (primary REST source)
         self.dex_hot_scanner = DexHotScannerSource(
             chains=("solana",),
             limit=30,
@@ -186,6 +256,31 @@ class TokenDiscovery:
             min_volume_h24_usd=40_000.0,
             min_txns_h1=15,
         )
+
+        # Real-time WebSocket sources (higher priority)
+        try:
+            self.pumpfun_source = PumpFunSource()
+        except Exception as exc:
+            logger.warning(f"PumpFunSource init failed: {exc}")
+            self.pumpfun_source = None
+
+        try:
+            self.migration_source = MigrationDiscoverySource()
+        except Exception as exc:
+            logger.warning(f"MigrationDiscoverySource init failed: {exc}")
+            self.migration_source = None
+
+        try:
+            self.meteora_source = MeteoraScannerSource()
+        except Exception as exc:
+            logger.warning(f"MeteoraScannerSource init failed: {exc}")
+            self.meteora_source = None
+
+        try:
+            self.event_proxy_source = EventProxySource()
+        except Exception as exc:
+            logger.warning(f"EventProxySource init failed: {exc}")
+            self.event_proxy_source = None
 
         # Working sources - verified January 2025
         self.sources = {
@@ -260,7 +355,32 @@ class TokenDiscovery:
 
         logger.info(f"Starting token discovery (HotScanner + {len(self.sources)} sources)...")
 
-        # --- Step 1: DexScreener HotScanner (primary, highest-quality source) ---
+        # --- Step 0: Real-time WebSocket sources (highest priority) ---
+        for src_name, src_obj, priority in [
+            ("event_proxy",        self.event_proxy_source,  25),
+            ("migration_monitor",  self.migration_source,    20),
+            ("meteora_scanner",    self.meteora_source,      18),
+            ("pumpfun_ws",         self.pumpfun_source,      15),
+        ]:
+            if src_obj is None:
+                continue
+            try:
+                ws_tokens = src_obj.fetch()
+                added = 0
+                for token in ws_tokens:
+                    address = token.get('address', '').lower()
+                    if address and address not in seen_addresses:
+                        seen_addresses.add(address)
+                        token.setdefault('source_priority', priority)
+                        token.setdefault('discovered_at', datetime.now().isoformat())
+                        all_tokens.append(token)
+                        added += 1
+                if added:
+                    logger.info(f"✓ {src_name}: {added} tokens (priority: {priority})")
+            except Exception as exc:
+                logger.error(f"✗ {src_name} failed: {exc}")
+
+        # --- Step 1: DexScreener HotScanner (primary REST source) ---
         try:
             hot_tokens = self.dex_hot_scanner.fetch()
             for token in hot_tokens:
@@ -501,6 +621,7 @@ class TokenDiscovery:
                 age_hours = self._calculate_age_hours(pair.get('pairCreatedAt'))
                 recency_boost = 2.0 if age_hours < 1 else 1.5 if age_hours < 6 else 1.0
 
+                txns_h1 = pair.get('txns', {}).get('h1', {})
                 tokens.append({
                     'address': address,
                     'symbol': symbol,
@@ -512,7 +633,9 @@ class TokenDiscovery:
                     'price_usd': float(pair.get('priceUsd', 0)),
                     'age_hours': age_hours,
                     'memecoin_score': recency_boost,
-                    'source_raw': 'dexscreener'
+                    'source_raw': 'dexscreener',
+                    'buys_1h': int(txns_h1.get('buys', 0)),
+                    'sells_1h': int(txns_h1.get('sells', 0)),
                 })
 
                 if len(tokens) >= max_tokens:

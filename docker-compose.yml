@@ -1,0 +1,24 @@
+# docker-compose.yml
+# Optional parser-proxy-ws sidecar for sub-millisecond pool creation events.
+#
+# Requires:
+#   YELLOWSTONE_URL   — Yellowstone gRPC endpoint (e.g. from Helius/Triton)
+#   YELLOWSTONE_TOKEN — Auth token for the gRPC endpoint
+#
+# After starting, set EVENT_PROXY_URL=ws://localhost:8900 in your .env.
+# Thor falls back gracefully if this service is not running.
+
+services:
+  parser-proxy:
+    image: ghcr.io/0xfnzero/parser-proxy-ws:latest
+    restart: unless-stopped
+    environment:
+      - YELLOWSTONE_URL=${YELLOWSTONE_URL}
+      - YELLOWSTONE_TOKEN=${YELLOWSTONE_TOKEN}
+    ports:
+      - "8900:8900"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8900"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

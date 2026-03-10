@@ -14,6 +14,10 @@ class Position:
     quantity: float
     entry_price: float
     current_price: float = 0.0
+    peak_price: float = 0.0      # Highest price seen (for trailing stop)
+    partial_sold: int = 0         # Bitmask: bit0=TP1 fired, bit1=TP2 fired
+    entry_tx: str = ""            # Buy transaction signature
+    entry_time: str = ""          # ISO timestamp
 
     @property
     def unrealized_pnl(self) -> float:
@@ -226,13 +230,17 @@ class RiskManager:
             logger.error(f"Error checking take profit: {e}")
             return False
 
-    def add_position(self, token_address: str, symbol: str, quantity: float, entry_price: float) -> None:
+    def add_position(self, token_address: str, symbol: str, quantity: float,
+                     entry_price: float, entry_tx: str = "") -> None:
         """Record a new open position."""
         self.positions[token_address] = Position(
             symbol=symbol,
             quantity=quantity,
             entry_price=entry_price,
             current_price=entry_price,
+            peak_price=entry_price,
+            entry_tx=entry_tx,
+            entry_time=datetime.now().isoformat(),
         )
         today = datetime.now().date()
         self.daily_trades[today] = self.daily_trades.get(today, 0) + 1

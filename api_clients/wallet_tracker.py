@@ -14,6 +14,24 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+# Known DEX program IDs on Solana
+DEX_PROGRAM_IDS: Dict[str, str] = {
+    "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8": "raydium_amm_v4",
+    "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4": "jupiter_v6",
+    "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P": "pumpfun",
+    "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA": "pumpswap",
+    "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc": "orca_whirlpool",
+    "LBUZKhRxPF3XUpBCjp4YzTKgLe4eLDhZ83vTssEB6qMa": "meteora_dlmm",
+    "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN": "meteora_dbc",
+    "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK": "raydium_clmm",
+    "5quBtoiQqxF9Jv6KYKctB59NT3gtJD2Y65kdnB1Uev3h": "raydium_lp_v4",
+}
+
+# Wrapped SOL mint
+WSOL_MINT = "So11111111111111111111111111111111111111112"
+# USDC mint
+USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+
 
 class WalletTracker:
     """Track and copy trades from successful wallets"""
@@ -145,17 +163,127 @@ class WalletTracker:
 
     def _extract_swap_from_transaction(self, transaction) -> Optional[Dict]:
         """
-        Extract swap details from transaction
+        Extract swap details from a parsed Solana transaction.
 
-        This is simplified - production version would fully parse:
-        - Jupiter swaps
-        - Raydium swaps
-        - Orca swaps
-        - Direct DEX interactions
+        Strategy:
+        1. Identify which DEX program was used via account keys.
+        2. Diff preTokenBalances vs postTokenBalances to find the
+           token that was bought (balance increased) or sold (decreased).
+        3. Diff preBalances vs postBalances (index 0 = fee-payer) for SOL delta.
+        4. Return standardised swap dict.
         """
-        # Placeholder - actual implementation requires parsing instruction data
-        # and identifying token transfers
-        return None
+        try:
+            meta = transaction.meta
+            if meta is None or (hasattr(meta, 'err') and meta.err is not None):
+                return None
+
+            # ---- 1. Identify DEX ----------------------------------------
+            # Account keys come back differently depending on encoding.
+            # Try both object attribute and dict access.
+            account_keys = []
+            try:
+                msg = transaction.transaction.message
+                account_keys = [str(k) for k in msg.account_keys]
+            except Exception:
+                pass
+
+            dex_name = "unknown"
+            for key in account_keys:
+                if key in DEX_PROGRAM_IDS:
+                    dex_name = DEX_PROGRAM_IDS[key]
+                    break
+
+            # Only process known DEX transactions
+            if dex_name == "unknown":
+                return None
+
+            # ---- 2. Find traded token from balance diffs ----------------
+            pre_balances = list(getattr(meta, 'pre_token_balances', None) or [])
+            post_balances = list(getattr(meta, 'post_token_balances', None) or [])
+
+            # Build maps: account_index -> {mint, amount}
+            pre_map: Dict[int, Dict] = {}
+            for b in pre_balances:
+                idx = getattr(b, 'account_index', None)
+                mint = getattr(b, 'mint', None) or ""
+                amount_str = ""
+                try:
+                    amount_str = b.ui_token_amount.ui_amount_string
+                except Exception:
+                    pass
+                if idx is not None and mint and mint not in (WSOL_MINT, USDC_MINT):
+                    pre_map[idx] = {"mint": str(mint), "amount": float(amount_str or 0)}
+
+            post_map: Dict[int, Dict] = {}
+            for b in post_balances:
+                idx = getattr(b, 'account_index', None)
+                mint = getattr(b, 'mint', None) or ""
+                amount_str = ""
+                try:
+                    amount_str = b.ui_token_amount.ui_amount_string
+                except Exception:
+                    pass
+                if idx is not None and mint and mint not in (WSOL_MINT, USDC_MINT):
+                    post_map[idx] = {"mint": str(mint), "amount": float(amount_str or 0)}
+
+            # Find the token whose balance changed most
+            bought_token = None
+            sold_token = None
+            max_increase = 0.0
+            max_decrease = 0.0
+
+            all_indices = set(pre_map) | set(post_map)
+            for idx in all_indices:
+                pre_amt = pre_map.get(idx, {}).get("amount", 0.0)
+                post_amt = post_map.get(idx, {}).get("amount", 0.0)
+                mint = (post_map.get(idx) or pre_map.get(idx, {})).get("mint", "")
+                if not mint:
+                    continue
+                delta = post_amt - pre_amt
+                if delta > max_increase:
+                    max_increase = delta
+                    bought_token = mint
+                elif delta < -max_decrease:
+                    max_decrease = abs(delta)
+                    sold_token = mint
+
+            # Determine action and token address
+            if bought_token:
+                action = "buy"
+                token_address = bought_token
+            elif sold_token:
+                action = "sell"
+                token_address = sold_token
+            else:
+                return None
+
+            # ---- 3. SOL delta for value estimate -----------------------
+            sol_value_usd = 0.0
+            try:
+                pre_sol = list(getattr(meta, 'pre_balances', []) or [])
+                post_sol = list(getattr(meta, 'post_balances', []) or [])
+                if pre_sol and post_sol:
+                    # Index 0 is fee-payer / main wallet
+                    sol_delta_lamports = abs(post_sol[0] - pre_sol[0])
+                    sol_delta = sol_delta_lamports / 1_000_000_000
+                    # Quick price estimate (replaced by live price in caller)
+                    sol_value_usd = sol_delta * 150.0
+            except Exception:
+                pass
+
+            return {
+                "token": token_address,
+                "action": action,
+                "sol_amount": sol_value_usd / 150.0,
+                "token_amount": max_increase if action == "buy" else max_decrease,
+                "price": 0.0,  # Caller can enrich with live price
+                "value_usd": sol_value_usd,
+                "dex": dex_name,
+            }
+
+        except Exception as exc:
+            logger.debug(f"_extract_swap_from_transaction error: {exc}")
+            return None
 
     async def monitor_wallets(self, callback=None) -> List[Dict]:
         """

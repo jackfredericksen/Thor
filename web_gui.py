@@ -40,7 +40,7 @@ def _get_sol_balance() -> float:
     """Fetch live SOL wallet balance; returns 0.0 on any error."""
     try:
         if bot and hasattr(bot, 'trader') and hasattr(bot.trader, 'solana_client'):
-            return asyncio.run(bot.trader.solana_client.get_sol_balance())
+            return bot.trader._run_async(bot.trader.solana_client.get_sol_balance())
     except Exception:
         pass
     return 0.0
@@ -209,6 +209,51 @@ def get_portfolio():
     if bot and hasattr(bot, 'trader'):
         return jsonify(bot.trader.get_portfolio_summary())
     return jsonify({})
+
+@app.route('/api/positions')
+def get_positions():
+    """Get all open positions with live P&L."""
+    if not bot or not hasattr(bot, 'trader'):
+        return jsonify([])
+    positions = []
+    for addr, pos in bot.trader.risk_manager.positions.items():
+        entry = pos.entry_price or 0
+        current = pos.current_price or entry
+        pnl_usd = (current - entry) * pos.quantity if entry else 0
+        pnl_pct = ((current - entry) / entry * 100) if entry else 0
+        positions.append({
+            'address': addr,
+            'symbol': pos.symbol,
+            'quantity': pos.quantity,
+            'entry_price': entry,
+            'current_price': current,
+            'peak_price': pos.peak_price,
+            'pnl_usd': round(pnl_usd, 4),
+            'pnl_pct': round(pnl_pct, 2),
+            'cost_usd': round(pos.cost_basis, 4),
+            'partial_sold': pos.partial_sold,
+            'entry_tx': pos.entry_tx,
+            'entry_time': pos.entry_time,
+        })
+    return jsonify(positions)
+
+@app.route('/api/positions/<token_address>/close', methods=['POST'])
+def close_position(token_address):
+    """Manually close an open position via the web GUI."""
+    if not bot or not hasattr(bot, 'trader'):
+        return jsonify({'error': 'Bot not running'}), 400
+    pos = bot.trader.risk_manager.positions.get(token_address)
+    if not pos:
+        return jsonify({'error': 'Position not found'}), 404
+    try:
+        ok = bot.trader._execute_sell(
+            token_address, pos.symbol,
+            pos.current_price or pos.entry_price,
+            reason="Manual close (web GUI)",
+        )
+        return jsonify({'success': ok})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
 
 @app.route('/api/dashboard')
 def get_dashboard():

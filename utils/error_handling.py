@@ -168,24 +168,29 @@ def safe_int(value: Any, default: int = 0) -> int:
 
 
 def validate_token_address(address: str) -> bool:
-    """Validate Ethereum token address format"""
+    """Validate token address — accepts both Solana (base58) and Ethereum (0x hex) formats."""
     if not address or not isinstance(address, str):
         return False
 
-    # Remove 0x prefix if present
-    address = address.lower()
-    if address.startswith("0x"):
-        address = address[2:]
+    address = address.strip()
 
-    # Check if it's 40 hex characters
-    if len(address) != 40:
-        return False
+    # Ethereum: 0x + 40 hex chars
+    if address.startswith("0x") or address.startswith("0X"):
+        hex_part = address[2:]
+        if len(hex_part) != 40:
+            return False
+        try:
+            int(hex_part, 16)
+            return True
+        except ValueError:
+            return False
 
-    try:
-        int(address, 16)
+    # Solana: 32–44 base58 characters [1-9A-HJ-NP-Za-km-z]
+    import re
+    if re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{32,44}", address):
         return True
-    except ValueError:
-        return False
+
+    return False
 
 
 class CircuitBreaker:
